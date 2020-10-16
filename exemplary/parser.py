@@ -2,32 +2,32 @@ from sourcer import Grammar
 
 
 grammar = Grammar(r'''
-    `from textwrap import dedent`
-
     start = List(Text | VisibleSection | HiddenSection)
 
     Text = (ExpectNot(Marker) >> /.|\n/)+
         |> `lambda x: ''.join(x)`
 
-    Marker = "```" | "~~~" | "<!--" | "-->"
+    Marker = "```" | "~~~" | "<!--"
 
     class VisibleSection {
+        is_visible: `True`
         tag: Opt(InlineTag) << /[\s\n]*/
-        body: Code
+        code: Code
     }
 
     class HiddenSection {
+        is_visible: `False`
         tag: StartComment >> DanglingTag
-        body: Code << /(\s|\n)*\-\->/
+        code: Code << /(\s|\n)*\-\->/
     }
 
     InlineTag = StartComment >> /.*?(?=\s*\-\->)/ << /\s*\-\-\>/
-        |> `lambda x: x or None`
+        |> `lambda x: x.lower() or None`
 
     DanglingTag = (/[^\n]*/ << /(\s|\n)*/)
-        |> `lambda x: x.strip() or None`
+        |> `lambda x: x.strip().lower() or None`
 
-    HiddenBody = /(.|\n)*?(?=\s*\-\-\>)/ |> `dedent`
+    HiddenBody = /(.|\n)*?(?=\s*\-\-\>)/
 
     StartComment = /\<\!\-\-[ \t]*/
 
@@ -35,8 +35,8 @@ grammar = Grammar(r'''
 
     class CodeSection(marker) {
         open: marker
-        language: /[^\n]*/ |> `lambda x: x.strip() or None` << /\n/
-        body: List(ExpectNot(marker) >> /.|\n/) |> `lambda x: dedent(''.join(x))`
+        language: /[^\n]*/ |> `lambda x: x.strip().lower() or None` << /\n/
+        body: List(ExpectNot(marker) >> /.|\n/) |> `lambda x: ''.join(x)`
         close: marker
     }
 ''')

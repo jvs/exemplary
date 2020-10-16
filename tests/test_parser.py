@@ -3,7 +3,7 @@ from exemplary import parser
 
 
 def test_parsing_simple_example():
-    result = parser.parse(r'''
+    result = parser.parse(dedent(r'''
         # foo
         bar
         <!-- baz -->
@@ -11,24 +11,25 @@ def test_parsing_simple_example():
         buz zim
         ```
         zam
-    ''')
+    '''))
     assert result == [
-        '\n        # foo\n        bar\n        ',
+        '\n# foo\nbar\n',
         parser.grammar.VisibleSection(
+            is_visible=True,
             tag='baz',
-            body=parser.grammar.CodeSection(
+            code=parser.grammar.CodeSection(
                 open='```',
                 language='fiz',
                 body='buz zim\n',
                 close='```',
             ),
         ),
-        '\n        zam\n    ',
+        '\nzam\n',
     ]
 
 
 def test_parsing_different_kinds_of_section():
-    result = parser.parse(r'''
+    result = parser.parse(dedent(r'''
         # tilde, tag, language
         <!-- fiz -->
         ~~~buz
@@ -100,7 +101,7 @@ def test_parsing_different_kinds_of_section():
         buz ```~~zim~~```
         ~~~
         -->
-    ''')
+    '''))
 
     sections = [x for x in result if not isinstance(x, str)]
     assert len(sections) == 12
@@ -109,7 +110,7 @@ def test_parsing_different_kinds_of_section():
     expect_langs = ['buz', 'fiz', None, None] * 3
 
     tags = [x.tag for x in sections]
-    langs = [x.body.language for x in sections]
+    langs = [x.code.language for x in sections]
 
     assert tags == expect_tags
     assert langs == expect_langs
