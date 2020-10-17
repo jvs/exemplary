@@ -28,15 +28,15 @@ Exemplary solves two main problems:
 
 ## How do you use Exemplary?
 
-**TLDR**:
+### TLDR:
 
 * `exemplary.run(pathnames)` -- runs all the Python examples in your
   Markdown files.
 * `exemplary.run(pathnames, render=True)` -- runs all your Python
   examples, and also renders the output of any examples that start with `>>>`.
 
-Use `pathnames=glob('**/*.md')` to run Exemplary on all the Markdown files in
-your project.
+(Use `pathnames=glob('**/*.md')` to run Exemplary on all the Markdown files in
+your project.)
 
 
 ### For testing:
