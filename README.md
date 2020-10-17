@@ -72,7 +72,7 @@ def render_docs():
     exemplary.run(glob('**/*.md'), render=True)
 ```
 
-Aftwards, the example would look like this:
+Aftwards, the example will look like this:
 
 ~~~markdown
 # How to use deque
@@ -88,12 +88,12 @@ Aftwards, the example would look like this:
 ```
 ~~~
 
-When Exemplary sees an example that starts with `>>> `, it runs the example in
+When Exemplary sees an example that starts with `>>>`, it runs the example in
 Python's iteractive interpreter, and adds the interpreter's output to your
 documentation.
 
-(Note that Exemplary adds an extra newline after the interpreter's output, to
-improve readability.)
+(Exemplary adds an extra newline after the interpreter's output, to improve
+readability.)
 
 If you run Exemplary again, it will render the example again, ignoring any
 output that may already appear in the example. The lets you run Exemplary
@@ -112,10 +112,13 @@ For example, if you have:
 
 ~~~markdown
 # My example
+
 ```python
 x = "hello"
 ```
+
 Now use x:
+
 ```python
 >>> print(x)
 ```
@@ -129,7 +132,7 @@ If you need an example to start fresh in its own namespace, you can put a specia
 HTML comment in the line before your example:
 
 ~~~markdown
-&lt;!-- fresh example --&gt;
+<!-- fresh example -->
 ```python
 import foo
 ...
@@ -158,12 +161,12 @@ import something
 foo = do_something()
 ```
 
-&lt;!--
+<!--
 ```python
 assert foo.some_property
 assert some_other_predicate(foo)
 ```
---&gt;
+-->
 ~~~
 
 Exemplary will run both Python sections -- the one before the comment and the
@@ -181,5 +184,5 @@ documentation, and structure them this way.
 
 ## What if I don't want Exemplary to test an example?
 
-Put the HTML comment `&lt;!-- skip example --&gt;` on the line above each
+Put the HTML comment `<!-- skip example -->` on the line above each
 example that you want Exemplary to ignore.
