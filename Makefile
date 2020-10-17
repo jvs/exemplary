@@ -49,7 +49,7 @@ tag: clean
 		"s/^__version__ = [\'\"]([^\'\"]+)[\'\"]$$/\1/p" \
 		exemplary.py))
 	@echo Tagging version $(VERSION)
-	# TODO: git tag -a $(VERSION) -m "Version $(VERSION)"
+	git tag -a $(VERSION) -m "Version $(VERSION)"
 
 # Build the distributeion.
 dist: clean
