@@ -86,22 +86,42 @@ Aftwards, the example would look like this:
 ```
 ~~~
 
-Exemplary runs these kinds of examples in Python's interactive interpreter, and
-adds the output to your examples. (Note that Exemplary adds an extra newline
-after the interpreter's output, to improve readability.)
+When Exemplary sees an example that starts with `>>> `, it runs the example in
+Python's iteractive interpreter, and adds the interpreter's output to your
+documentation.
+
+(Note that Exemplary adds an extra newline after the interpreter's output, to
+improve readability.)
 
 If you run Exemplary again, it will render the example again, ignoring any
-output that may already appear in the example. So you can run exemplary multiple
-times as you edit your documentation.
+output that may already appear in the example. The lets you run Exemplary
+multiple times as you edit your documentation.
 
 Note: Because Exemplary modifies your files, make sure they are committed to
-git before rendering them.
+git before you render them.
 
 
 ## What if I have multiple examples in one markdown file?
 
-For each file, Exemplary essentially runs each example in the same interpreter.
+Exemplary runs each example in the same file in the same interpreter.
 This allows you to break up your examples with text sections.
+
+For example, if you have:
+
+~~~markdown
+# My example
+```python
+x = "hello"
+```
+Now use x:
+```python
+>>> print(x)
+```
+~~~
+
+When you render this example, Exemplary will add `hello` at the end. The point
+is that the second `python` section can see `x`, which is defined in the first
+section.
 
 If you need an example to start fresh in its own namespace, you can put a special
 HTML comment in the line before your example:
