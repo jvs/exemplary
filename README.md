@@ -134,8 +134,10 @@ HTML comment in the line before your example:
 ~~~markdown
 <!-- fresh example -->
 ```python
+# Exmplary will run this example in a fresh environment.
 import foo
-...
+
+foo.bar('baz')
 ```
 ~~~
 
