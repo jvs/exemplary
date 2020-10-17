@@ -13,7 +13,7 @@ def install_requires():
 
 
 def version():
-    with open('exemplary.py') as f:
+    with open('exemplary/__init__.py') as f:
         regex = re.compile('\\n__version__\\s*=\\s*[\'"]+([\\d\\.]+)[\'"]\n')
         return regex.search(f.read()).group(1)
 
@@ -30,7 +30,7 @@ setuptools.setup(
     data_files=[('', ['README.md', 'requirements.txt', 'requirements-dev.txt'])],
     python_requires='>=3.6',
     install_requires=install_requires(),
-    py_modules=['exemplary'],
+    packages=['exemplary'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'License :: OSI Approved :: MIT License',

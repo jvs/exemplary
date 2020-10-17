@@ -1,54 +1,11 @@
 import io
 import pexpect
 
-from sourcer import Grammar
+from . import parser
 
-
-__version__ = '0.0.4'
 
 _ARROWS = '>>> '
 _DOTS = '... '
-
-
-grammar = Grammar(r'''
-    start = List(Text | VisibleSection | HiddenSection)
-
-    Text = (ExpectNot(Marker) >> /.|\n/)+
-        |> `lambda x: ''.join(x)`
-
-    Marker = "```" | "~~~" | "<!--"
-
-    class VisibleSection {
-        is_visible: `True`
-        tag: Opt(InlineTag) << /[\s\n]*/
-        code: Code
-    }
-
-    class HiddenSection {
-        is_visible: `False`
-        tag: StartComment >> DanglingTag
-        code: Code << /(\s|\n)*\-\->/
-    }
-
-    InlineTag = StartComment >> /.*?(?=\s*\-\->)/ << /\s*\-\-\>/
-        |> `lambda x: x.lower() or None`
-
-    DanglingTag = (/[^\n]*/ << /(\s|\n)*/)
-        |> `lambda x: x.strip().lower() or None`
-
-    HiddenBody = /(.|\n)*?(?=\s*\-\-\>)/
-
-    StartComment = /\<\!\-\-[ \t]*/
-
-    Code = CodeSection("```") | CodeSection("~~~")
-
-    class CodeSection(marker) {
-        open: marker
-        language: /[^\n]*/ |> `lambda x: x.strip().lower() or None` << /\n/
-        body: List(ExpectNot(marker) >> /.|\n/) |> `lambda x: ''.join(x)`
-        close: marker
-    }
-''')
 
 
 def run(pathnames, render=False):
@@ -66,7 +23,8 @@ def run(pathnames, render=False):
         print('# Testing', pathname, flush=True)
         test_document(contents)
 
-        if render:
+        # Ignore documents that don't have any interactive-mode examples.
+        if render and '\n>>> ' in contents:
             print('# Rendering', pathname, flush=True)
             rendering = render_document(contents)
 
@@ -82,7 +40,7 @@ def test_document(document_contents):
     """
     global_env, local_env = {}, {}
 
-    for section in grammar.parse(document_contents):
+    for section in parser.parse(document_contents):
         if isinstance(section, str):
             continue
 
@@ -127,7 +85,7 @@ def render_document(document_contents):
     result = io.StringIO()
     proc = _PythonProcess()
 
-    for section in grammar.parse(document_contents):
+    for section in parser.parse(document_contents):
         if isinstance(section, str):
             result.write(section)
             continue
