@@ -40,7 +40,6 @@ coverage: clean image
 # - Commit / merge to "main" branch.
 # - Run:
 #   - make tag
-#   - git push origin VERSION
 #   - make upload_test
 #   - make upload_real
 
@@ -50,6 +49,7 @@ tag: clean
 		exemplary.py))
 	@echo Tagging version $(VERSION)
 	git tag -a $(VERSION) -m "Version $(VERSION)"
+	git push origin $(VERSION)
 
 # Build the distributeion.
 dist: clean
