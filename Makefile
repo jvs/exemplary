@@ -40,7 +40,7 @@ coverage: clean image
 # - Commit / merge to "main" branch.
 # - Run:
 #   - make tag
-#   - git push
+#   - git push origin VERSION
 #   - make upload_test
 #   - make upload_real
 
