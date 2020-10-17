@@ -1,9 +1,90 @@
 from textwrap import dedent
-from exemplary import parser
+import pytest
+
+import exemplary
+
+
+def test_simple_rendering():
+    result = exemplary.render_document(dedent(r'''
+        ```python
+        greeting = "hello"
+        friend = "world"
+        ```
+
+        ```python
+        >>> print(f"{greeting}, {friend}.")
+        ```
+    '''))
+
+    assert result == dedent(r'''
+        ```python
+        greeting = "hello"
+        friend = "world"
+        ```
+
+        ```python
+        >>> print(f"{greeting}, {friend}.")
+        hello, world.
+        ```
+    ''')
+
+    result = exemplary.render_document(dedent(r'''
+        ```python
+        >>> from collections import defaultdict
+        >>> d = defaultdict(list)
+        >>> d['foo'].append('bar')
+        >>> d['foo']
+        >>> d['baz']
+        ```
+    '''))
+    assert result == dedent(r'''
+        ```python
+        >>> from collections import defaultdict
+        >>> d = defaultdict(list)
+        >>> d['foo'].append('bar')
+        >>> d['foo']
+        ['bar']
+
+        >>> d['baz']
+        []
+        ```
+    ''')
+
+
+def test_the_test_function():
+    exemplary.test_document(dedent(r'''
+        ```python
+        result = True
+        ```
+
+        ```bash
+        printenv
+        ```
+
+        <!--
+        ```python
+        assert result
+        ```
+        -->
+    '''))
+
+    with pytest.raises(AssertionError):
+        exemplary.test_document(dedent(r'''
+            ```python
+            result = False
+            ```
+
+            <!--
+            ```python
+            assert result
+            ```
+            -->
+        '''))
 
 
 def test_parsing_simple_example():
-    result = parser.parse(dedent(r'''
+    g = exemplary.parser.grammar
+    result = exemplary.parse_document(dedent(r'''
         # foo
         bar
         <!-- baz -->
@@ -14,10 +95,10 @@ def test_parsing_simple_example():
     '''))
     assert result == [
         '\n# foo\nbar\n',
-        parser.grammar.VisibleSection(
+        g.VisibleSection(
             is_visible=True,
             tag='baz',
-            code=parser.grammar.CodeSection(
+            code=g.CodeSection(
                 open='```',
                 language='fiz',
                 body='buz zim\n',
@@ -29,7 +110,7 @@ def test_parsing_simple_example():
 
 
 def test_parsing_different_kinds_of_section():
-    result = parser.parse(dedent(r'''
+    result = exemplary.parse_document(dedent(r'''
         # tilde, tag, language
         <!-- fiz -->
         ~~~buz

@@ -20,7 +20,7 @@ clean:
 
 # Run the tests in a docker container.
 test: clean image
-	$(RUN) python -m pytest -v -s tests
+	$(RUN) python -m pytest -v -s tests.py
 
 # Run the tests, compute test coverage, and open the coverage report.
 coverage: clean image
@@ -29,11 +29,6 @@ coverage: clean image
 		&& coverage html"
 	open "htmlcov/index.html"
 
-# Build the documentation.
-docs:
-	$(RUN) python render_output_for_examples.py
-	$(MAKE) -C docs html
-
 # Run the code-formatter
 black: image
 	$(RUN) black exemplary -S
@@ -41,6 +36,9 @@ black: image
 # You can use a file called "wip.py" to run experiments.
 wip:
 	$(RUN) python wip.py
+
+bash:
+	docker run --rm --name exemplary -v `pwd`:/workspace -it exemplary /bin/bash
 
 # Build the distributeion.
 dist:
@@ -56,4 +54,4 @@ test_upload: dist
 real_upload: dist
 	twine upload --repository pypi dist/*
 
-.PHONY: clean docs test coverage black wip dist test_upload real_upload
+.PHONY: clean test coverage black wip dist test_upload real_upload bash

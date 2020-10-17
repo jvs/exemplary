@@ -3,11 +3,11 @@ import pexpect
 from . import parser
 
 
-def render(document_contents):
+def render_document(document_contents):
     result = io.StringIO()
     proc = _PythonProcess()
 
-    for section in parser.parse(document_contents):
+    for section in parser.parse_document(document_contents):
         if isinstance(section, str):
             result.write(section)
             continue
@@ -17,7 +17,7 @@ def render(document_contents):
         section_content = document_contents[section_start : section_end + 1]
 
         # Ignore hidden sections when rendering the docs.
-        if not section.is_visible:
+        if not section.is_visible or section.tag == 'skip example':
             result.write(section_content)
             continue
 
@@ -27,8 +27,8 @@ def render(document_contents):
             result.write(section_content)
             continue
 
-        # Restart our Python process when we see a "restart" tag.
-        if section.tag == 'restart':
+        # Restart our Python process when we see a "fresh example" tag.
+        if section.tag == 'fresh example':
             proc.restart()
 
         # Run the code.
@@ -53,13 +53,9 @@ def render(document_contents):
     return result.getvalue()
 
 
-def test(contents):
-    # TODO: Implement this function. It should run the tests in the docs.
-    pass
-
-
 ARROWS = '>>> '
 DOTS = '... '
+
 
 class _PythonProcess:
     def __init__(self):
@@ -91,7 +87,6 @@ class _PythonProcess:
 
         self.sendline('    )', DOTS)
         self.sendline('    print("ok")', DOTS)
-
         self.sendline('except Exception:', DOTS)
         self.sendline('    import traceback')
         self.sendline('    traceback.print_exc()', DOTS)
@@ -122,7 +117,7 @@ class _PythonProcess:
             self.sendline(line, expect)
 
         result = self.flush()
-        return result.replace('\n>>> ', '\n\n>>> ') + '\n'
+        return add_padding(result)
 
     def sendline(self, line, expect=[ARROWS, DOTS]):
         self.process.sendline(line)
@@ -135,3 +130,15 @@ class _PythonProcess:
         self.process.logfile_read = io.StringIO()
         self.process.logfile_read.write(remainder)
         return result
+
+
+def add_padding(contents):
+    result = []
+    was_prompt = True
+    for line in contents.splitlines():
+        if line.startswith(ARROWS) and not was_prompt:
+            result.append('')
+        result.append(line)
+        was_prompt = line.startswith((ARROWS, DOTS))
+    result.append('')
+    return '\n'.join(result)

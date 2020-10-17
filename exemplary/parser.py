@@ -42,5 +42,5 @@ grammar = Grammar(r'''
 ''')
 
 
-def parse(text):
-    return grammar.parse(text)
+def parse_document(document_contents):
+    return grammar.parse(document_contents)
