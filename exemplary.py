@@ -4,7 +4,7 @@ import pexpect
 from sourcer import Grammar
 
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 _ARROWS = '>>> '
 _DOTS = '... '
@@ -58,20 +58,22 @@ def run(pathnames, render=False):
     If `render` is truthy, then this function also updates each document,
     filling in the output from Python's interactive interpreter.
     """
-    print('\n# Running Exemplary...')
+    print('\n# Running Exemplary...', flush=True)
     for pathname in pathnames:
         with open(pathname) as f:
             contents = f.read()
 
-        print('# Testing', pathname)
+        print('# Testing', pathname, flush=True)
         test_document(contents)
 
         if render:
-            print('# Rendering', pathname)
+            print('# Rendering', pathname, flush=True)
             rendering = render_document(contents)
 
-            with open(pathname, 'w') as f:
-                f.write(contents)
+            if rendering != contents:
+                print('# Updating', pathname, flush=True)
+                with open(pathname, 'w') as f:
+                    f.write(rendering)
 
 
 def test_document(document_contents):
@@ -86,7 +88,7 @@ def test_document(document_contents):
 
         # For now, ignore sections that aren't Python.
         code = section.code
-        if code.language is not None and code.language != 'python':
+        if code.language != 'python':
             continue
 
         # Ignore examples with the "skip example" tag.
@@ -102,7 +104,7 @@ def test_document(document_contents):
             continue
 
         print(f'# Testing Python section on line {code._position_info.start.line}:')
-        print(_make_preview(code.body))
+        print(_make_preview(code.body), flush=True)
         try:
             exec(code.body, global_env, local_env)
         except Exception:
@@ -178,6 +180,7 @@ def _make_preview(python_source_code):
             continue
         preview.append(line)
         if len(preview) > 6:
+            preview.append('...')
             break
     return '\n'.join(preview)
 
