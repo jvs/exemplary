@@ -110,7 +110,7 @@ documentation.
 readability.)
 
 If you run Exemplary again, it will render the example again, ignoring any
-output that may already appear in the example. The lets you run Exemplary
+output that may already appear in the example. This lets you run Exemplary
 multiple times as you edit your documentation.
 
 Note: Because Exemplary modifies your files, make sure they are committed to
