@@ -11,7 +11,8 @@ image: Dockerfile
 
 # Remove random debris left around by python, pytest, and coverage.
 clean:
-	-rm -rf \
+	@echo "Removing generated files."
+	@rm -rf \
 		__pycache__ \
 		.coverage \
 		.pytest_cache \
@@ -34,6 +35,22 @@ coverage: clean image
 		&& coverage html"
 	open "htmlcov/index.html"
 
+# How to publish a release:
+# - Update __version__ in exemplary.py.
+# - Commit / merge to "main" branch.
+# - Run:
+#   - make tag
+#   - git push
+#   - make upload_test
+#   - make upload_real
+
+tag: clean
+	$(eval VERSION=$(shell sed -n -E \
+		"s/^__version__ = [\'\"]([^\'\"]+)[\'\"]$$/\1/p" \
+		exemplary.py))
+	@echo Tagging version $(VERSION)
+	# TODO: git tag -a $(VERSION) -m "Version $(VERSION)"
+
 # Build the distributeion.
 dist: clean
 	rm -rf dist/
@@ -48,4 +65,4 @@ upload_test: dist
 upload_real: dist
 	twine upload --repository pypi dist/*
 
-.PHONY: bash clean coverage dist test upload_real upload_test
+.PHONY: bash clean coverage dist tag test upload_real upload_test
