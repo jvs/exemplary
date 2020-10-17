@@ -1,6 +1,10 @@
 # Runs the docker container and executes the command.
 RUN := docker run --rm --name exemplary -v `pwd`:/workspace exemplary
 
+# Runs bash in the container.
+bash:
+	docker run --rm --name exemplary -v `pwd`:/workspace -it exemplary /bin/bash
+
 # Create a docker image with Python and our dev dependencies.
 image: Dockerfile
 	docker build -t exemplary .
@@ -24,21 +28,10 @@ test: clean image
 
 # Run the tests, compute test coverage, and open the coverage report.
 coverage: clean image
-	$(RUN) /bin/bash -c "coverage run -m pytest tests \
+	$(RUN) /bin/bash -c "coverage run -m pytest -v -s tests.py \
 		&& coverage report \
 		&& coverage html"
 	open "htmlcov/index.html"
-
-# Run the code-formatter
-black: image
-	$(RUN) black exemplary -S
-
-# You can use a file called "wip.py" to run experiments.
-wip:
-	$(RUN) python wip.py
-
-bash:
-	docker run --rm --name exemplary -v `pwd`:/workspace -it exemplary /bin/bash
 
 # Build the distributeion.
 dist:
@@ -54,4 +47,4 @@ test_upload: dist
 real_upload: dist
 	twine upload --repository pypi dist/*
 
-.PHONY: clean test coverage black wip dist test_upload real_upload bash
+.PHONY: clean test coverage dist test_upload real_upload bash

@@ -1,3 +1,4 @@
+# Yes, it's overkill, but I prefer using Docker to venv / poetry / pipenv / etc.
 FROM python:3.6
 
 WORKDIR /workspace
