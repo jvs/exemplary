@@ -174,11 +174,11 @@ one inside the comment.
 
 This way you can:
 
-* thoroughly test your examples
-* keep examples and tests together in the same file
-* hide the tests so that they don't detract from the documentation
+* thoroughly test your examples.
+* keep examples and tests together in the same file.
+* hide the tests so that they don't detract from the documentation.
 
-Taken to the extreme, you could view all of your unit tests as part of your
+Taken to the extreme, you could treat all of your unit tests as part of your
 documentation, and structure them this way.
 
 
