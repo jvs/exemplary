@@ -86,7 +86,7 @@ def test_document(document_contents):
 
         # For now, ignore sections that aren't Python.
         code = section.code
-        if code.language is not None and code.language != 'python':
+        if code.language != 'python':
             continue
 
         # Ignore examples with the "skip example" tag.
