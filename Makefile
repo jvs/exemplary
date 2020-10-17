@@ -34,8 +34,8 @@ test: clean image parser
 # Run the tests, compute test coverage, and open the coverage report.
 coverage: clean image
 	$(RUN) /bin/bash -c "coverage run -m pytest -v -s tests.py \
-		&& coverage report \
-		&& coverage html"
+		&& coverage report --omit='exemplary/parser.py' \
+		&& coverage html --omit='exemplary/parser.py' "
 	open "htmlcov/index.html"
 
 # How to publish a release:
