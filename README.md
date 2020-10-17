@@ -116,6 +116,9 @@ multiple times as you edit your documentation.
 Note: Because Exemplary modifies your files, make sure they are committed to
 git before you render them.
 
+(Or, as part of your build, copy your Markdown files to a build directory, and
+then run Exemplary on the copies.)
+
 
 ## What if I have multiple examples in one markdown file?
 
