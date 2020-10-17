@@ -75,7 +75,7 @@ So, let's say you have some markdown like this:
 ```
 ~~~
 
-In your build script, run exemplary with `render=True`:
+In your build script, run Exemplary with `render=True`:
 
 ```python
 from glob import glob
