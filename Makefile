@@ -54,7 +54,7 @@ tag: clean
 	git tag -a $(VERSION) -m "Version $(VERSION)"
 	git push origin $(VERSION)
 
-# Build the distributeion.
+# Build the distribution.
 dist: clean parser
 	rm -rf dist/
 	python3 setup.py sdist
