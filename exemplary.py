@@ -4,7 +4,7 @@ import pexpect
 from sourcer import Grammar
 
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
 _ARROWS = '>>> '
 _DOTS = '... '
