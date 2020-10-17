@@ -28,6 +28,14 @@ Exemplary solves two main problems:
 
 ## How do you use Exemplary?
 
+**TLDR**:
+
+* `exemplary.run(glob('**/*.md'))` -- runs all the Python examples in your
+  Markdown files.
+* `exemplary.run(glob('**/*.md'), render=True)` -- runs all your Python
+  examples, and also adds the output to any examples that start with `>>>`.
+
+
 ### For testing:
 
 Put some Python sections in your markdown files.
