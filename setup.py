@@ -29,7 +29,7 @@ setuptools.setup(
     long_description_content_type='text/markdown',
     python_requires='>=3.6',
     install_requires=install_requires(),
-    packages=['exemplary'],
+    py_modules=['exemplary'],
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'License :: OSI Approved :: MIT License',

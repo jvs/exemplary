@@ -20,7 +20,8 @@ clean:
 		docs/_build/* \
 		dist \
 		htmlcov \
-		MANIFEST
+		MANIFEST \
+		*.egg-info
 
 # Run the tests in a docker container.
 test: clean image
@@ -34,17 +35,17 @@ coverage: clean image
 	open "htmlcov/index.html"
 
 # Build the distributeion.
-dist:
+dist: clean
 	rm -rf dist/
 	python3 setup.py sdist
 	twine check dist/*
 
 # Upload the library to pypitest.
-test_upload: dist
+upload_test: dist
 	twine upload --repository pypitest dist/*
 
 # Upload the library to pypi.
-real_upload: dist
+upload_real: dist
 	twine upload --repository pypi dist/*
 
-.PHONY: clean test coverage dist test_upload real_upload bash
+.PHONY: bash clean coverage dist test upload_real upload_test
