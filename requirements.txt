@@ -1,2 +1,2 @@
 pexpect
-sourcer==0.3.8
+sourcer
