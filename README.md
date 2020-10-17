@@ -35,8 +35,8 @@ Exemplary solves two main problems:
 * `exemplary.run(pathnames, render=True)` -- runs all your Python
   examples, and also renders the output of any examples that start with `>>>`.
 
-(Hint: Use `pathnames=glob('**/*.md')` to run Exemplary on all the Markdown
-files in your project.)
+(Hint: Use `glob('**/*.md', recursive=True)` to run Exemplary on all the
+Markdown files in your project.)
 
 
 ### For testing:
@@ -51,7 +51,8 @@ import exemplary
 
 def test_docs():
     # Run all the examples in your markdown files:
-    exemplary.run(glob('**/*.md'))
+    pathnames = glob('**/*.md', recursive=True)
+    exemplary.run(pathnames)
 ```
 
 This raises an exception if any of your examples fail.
@@ -83,7 +84,8 @@ import exemplary
 
 def render_docs():
     # Render all the examples in your markdown files:
-    exemplary.run(glob('**/*.md'), render=True)
+    pathnames = glob('**/*.md', recursive=True)
+    exemplary.run(pathnames, render=True)
 ```
 
 Aftwards, the example will look like this:
