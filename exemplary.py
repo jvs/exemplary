@@ -70,8 +70,10 @@ def run(pathnames, render=False):
             print('# Rendering', pathname, flush=True)
             rendering = render_document(contents)
 
-            with open(pathname, 'w') as f:
-                f.write(contents)
+            if rendering != contents:
+                print('# Updating', pathname, flush=True)
+                with open(pathname, 'w') as f:
+                    f.write(rendering)
 
 
 def test_document(document_contents):
