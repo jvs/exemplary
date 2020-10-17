@@ -5,7 +5,7 @@ import exemplary
 
 
 def test_simple_rendering():
-    result = exemplary.render_document(dedent(r'''
+    result = exemplary.interpreter.render_document(dedent(r'''
         ```python
         greeting = "hello"
         friend = "world"
@@ -28,7 +28,7 @@ def test_simple_rendering():
         ```
     ''')
 
-    result = exemplary.render_document(dedent(r'''
+    result = exemplary.interpreter.render_document(dedent(r'''
         ```python
         >>> from collections import defaultdict
         >>> d = defaultdict(list)
@@ -51,12 +51,12 @@ def test_simple_rendering():
     ''')
 
     # Make sure we can render the document multiple times.
-    result2 = exemplary.render_document(result)
+    result2 = exemplary.interpreter.render_document(result)
     assert result2 == result
 
 
 def test_the_test_function():
-    exemplary.test_document(dedent(r'''
+    exemplary.interpreter.test_document(dedent(r'''
         ```python
         result = True
         ```
@@ -78,7 +78,7 @@ def test_the_test_function():
     '''))
 
     with pytest.raises(AssertionError):
-        exemplary.test_document(dedent(r'''
+        exemplary.interpreter.test_document(dedent(r'''
             ```python
             result = False
             ```
@@ -92,7 +92,7 @@ def test_the_test_function():
 
 
 def test_parsing_simple_example():
-    g = exemplary.grammar
+    g = exemplary.parser
     result = g.parse(dedent(r'''
         # foo
         bar
@@ -119,7 +119,7 @@ def test_parsing_simple_example():
 
 
 def test_parsing_different_kinds_of_section():
-    result = exemplary.grammar.parse(dedent(r'''
+    result = exemplary.parser.parse(dedent(r'''
         # tilde, tag, language
         <!-- fiz -->
         ~~~buz

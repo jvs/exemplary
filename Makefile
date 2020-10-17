@@ -24,8 +24,11 @@ clean:
 		MANIFEST \
 		*.egg-info
 
+parser: grammar.txt
+	$(RUN) python generate_parser.py
+
 # Run the tests in a docker container.
-test: clean image
+test: clean image parser
 	$(RUN) python -m pytest -v -s tests.py
 
 # Run the tests, compute test coverage, and open the coverage report.
@@ -46,13 +49,13 @@ coverage: clean image
 tag: clean
 	$(eval VERSION=$(shell sed -n -E \
 		"s/^__version__ = [\'\"]([^\'\"]+)[\'\"]$$/\1/p" \
-		exemplary.py))
+		exemplary/__init__.py))
 	@echo Tagging version $(VERSION)
 	git tag -a $(VERSION) -m "Version $(VERSION)"
 	git push origin $(VERSION)
 
 # Build the distributeion.
-dist: clean
+dist: clean parser
 	rm -rf dist/
 	python3 setup.py sdist
 	twine check dist/*
