@@ -88,8 +88,8 @@ def test_the_test_function():
 
 
 def test_parsing_simple_example():
-    g = exemplary.parser.grammar
-    result = exemplary.parse_document(dedent(r'''
+    g = exemplary.grammar
+    result = g.parse(dedent(r'''
         # foo
         bar
         <!-- baz -->
@@ -115,7 +115,7 @@ def test_parsing_simple_example():
 
 
 def test_parsing_different_kinds_of_section():
-    result = exemplary.parse_document(dedent(r'''
+    result = exemplary.grammar.parse(dedent(r'''
         # tilde, tag, language
         <!-- fiz -->
         ~~~buz

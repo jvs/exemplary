@@ -13,6 +13,9 @@ pip install exemplary
 
 Exemplary requires Python 3.6 or later.
 
+Note: In your projects, you'll probably want to install Exemplary as a
+"dev" dependency. It's a tool for updating and testing your documentation.
+
 
 ## What problem does Exemplary solve?
 
