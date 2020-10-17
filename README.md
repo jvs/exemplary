@@ -1,4 +1,4 @@
-# exemplary
+# Exemplary
 
 A micro library for testing the Python examples in your documentation.
 
@@ -23,7 +23,7 @@ Exemplary solves two main problems:
 
 ## How do you use Exemplary?
 
-### For testing
+### For testing:
 
 Put some Python sections in your markdown files.
 
@@ -41,7 +41,7 @@ def test_docs():
 This raises an exception if any of your examples fail.
 
 
-### For rendering
+### For rendering:
 
 In this context, "rendering" means, "Taking an example and showing what it looks
 like when you run it in Python's interactive interpreter."

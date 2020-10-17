@@ -66,6 +66,11 @@ def test_the_test_function():
         assert result
         ```
         -->
+
+        <!-- skip example -->
+        ```python
+        assert False
+        ```
     '''))
 
     with pytest.raises(AssertionError):
