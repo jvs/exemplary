@@ -27,6 +27,7 @@ setuptools.setup(
     description='Build and test your Python examples',
     long_description=long_description(),
     long_description_content_type='text/markdown',
+    data_files=[('', ['README.md', 'requirements.txt', 'requirements-dev.txt'])],
     python_requires='>=3.6',
     install_requires=install_requires(),
     py_modules=['exemplary'],
