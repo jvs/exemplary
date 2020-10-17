@@ -35,8 +35,8 @@ Exemplary solves two main problems:
 * `exemplary.run(pathnames, render=True)` -- runs all your Python
   examples, and also renders the output of any examples that start with `>>>`.
 
-(Use `pathnames=glob('**/*.md')` to run Exemplary on all the Markdown files in
-your project.)
+(Hint: Use `pathnames=glob('**/*.md')` to run Exemplary on all the Markdown
+files in your project.)
 
 
 ### For testing:
@@ -113,7 +113,7 @@ If you run Exemplary again, it will render the example again, ignoring any
 output that may already appear in the example. This lets you run Exemplary
 multiple times as you edit your documentation.
 
-Note: Because Exemplary modifies your files, make sure they are committed to
+Take care: Because Exemplary modifies your files, make sure they are committed to
 git before you render them.
 
 (Or, as part of your build, copy your Markdown files to a build directory, and
