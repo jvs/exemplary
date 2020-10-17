@@ -205,3 +205,17 @@ documentation, and structure them this way.
 
 Put the HTML comment `<!-- skip example -->` on the line above each
 example that you want Exemplary to ignore.
+
+~~~markdown
+# My bad example
+
+Exemplary will never know...
+
+<!-- skip example -->
+```python
+>>> assert False
+```
+~~~
+
+Exemplary won't try to test or render this example, because it's guarded by
+the `<!-- skip example -->` comment.
