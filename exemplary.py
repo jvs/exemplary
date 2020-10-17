@@ -58,6 +58,7 @@ def run(pathnames, render=False):
     If `render` is truthy, then this function also updates each document,
     filling in the output from Python's interactive interpreter.
     """
+    print('\n# Running Exemplary...')
     for pathname in pathnames:
         with open(pathname) as f:
             contents = f.read()
@@ -71,8 +72,6 @@ def run(pathnames, render=False):
 
             with open(pathname, 'w') as f:
                 f.write(contents)
-
-        print()
 
 
 def test_document(document_contents):
@@ -110,6 +109,7 @@ def test_document(document_contents):
             print('# This section failed:')
             print(code.body)
             raise
+        print()
 
 
 def render_document(document_contents):
@@ -229,9 +229,9 @@ class _PythonProcess:
         lines = list(python_source_code.splitlines())
         pairs = []
         for line in python_source_code.splitlines():
-            if not line.strip():
+            # Ignore lines that don't represent user input.
+            if not line.startswith((_ARROWS, _DOTS)):
                 continue
-            assert line.startswith((_ARROWS, _DOTS))
             expect, line = line[:4], line[4:]
             if pairs:
                 pairs[-1].append(expect)

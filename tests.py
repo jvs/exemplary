@@ -50,6 +50,10 @@ def test_simple_rendering():
         ```
     ''')
 
+    # Make sure we can render the document multiple times.
+    result2 = exemplary.render_document(result)
+    assert result2 == result
+
 
 def test_the_test_function():
     exemplary.test_document(dedent(r'''
