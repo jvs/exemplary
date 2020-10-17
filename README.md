@@ -5,6 +5,8 @@ A micro library for testing the Python examples in your documentation.
 
 ## Installation
 
+To install Exemplary, use pip:
+
 ```console
 pip install exemplary
 ```
@@ -30,12 +32,12 @@ Put some Python sections in your markdown files.
 Then, in your tests:
 
 ```python
-import glob
+from glob import glob
 import exemplary
 
 def test_docs():
     # Run all the examples in your markdown files:
-    exemplary.run(glob.glob('**/*.md'))
+    exemplary.run(glob('**/*.md'))
 ```
 
 This raises an exception if any of your examples fail.
@@ -62,12 +64,12 @@ So, let's say you have some markdown like this:
 In your build script, run exemplary with `render=True`:
 
 ```python
-import glob
+from glob import glob
 import exemplary
 
 def render_docs():
     # Render all the examples in your markdown files:
-    exemplary.run(glob.glob('**/*.md'), render=True)
+    exemplary.run(glob('**/*.md'), render=True)
 ```
 
 Aftwards, the example would look like this:
