@@ -38,6 +38,12 @@ Exemplary solves two main problems:
 (Hint: Use `glob('**/*.md', recursive=True)` to run Exemplary on all the
 Markdown files in your project.)
 
+Or, to run exemplary from the command line:
+
+```console
+python3 -m exemplary --paths "**/*.md" --render
+```
+
 
 ### For testing:
 
