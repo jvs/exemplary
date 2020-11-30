@@ -1,11 +1,9 @@
 import io
+import re
+
 import pexpect
 
 from . import parser
-
-
-_ARROWS = '>>> '
-_DOTS = '... '
 
 
 def run(pathnames, render=False):
@@ -146,6 +144,7 @@ def _make_preview(python_source_code):
 class _PythonProcess:
     def __init__(self):
         self.process = None
+        self._prompt_pattern = re.compile(r'(\>\>\>|\.\.\.) $')
 
     def restart(self):
         if self.process is not None:
@@ -165,19 +164,19 @@ class _PythonProcess:
             self.batch(python_source_code)
 
     def batch(self, python_source_code):
-        self.sendline('try:', _DOTS)
-        self.sendline('    exec(', _DOTS)
+        self.sendline('try:')
+        self.sendline('    exec(')
 
         for line in python_source_code.splitlines():
-            self.sendline('        ' + repr(line + '\n'), _DOTS)
+            self.sendline('        ' + repr(line + '\n'))
 
-        self.sendline('    )', _DOTS)
-        self.sendline('    print("ok")', _DOTS)
-        self.sendline('except Exception:', _DOTS)
+        self.sendline('    )')
+        self.sendline('    print("ok")')
+        self.sendline('except Exception:')
         self.sendline('    import traceback')
-        self.sendline('    traceback.print_exc()', _DOTS)
-        self.sendline('    print("error")', _DOTS)
-        self.sendline('', _ARROWS)
+        self.sendline('    traceback.print_exc()')
+        self.sendline('    print("error")')
+        self.sendline('')
 
         result = self.flush()
         status = result.rsplit('\n', 1)[-1].strip()
@@ -188,26 +187,17 @@ class _PythonProcess:
 
     def simulate(self, python_source_code):
         lines = list(python_source_code.splitlines())
-        pairs = []
         for line in python_source_code.splitlines():
             # Ignore lines that don't represent user input.
-            if not line.startswith((_ARROWS[:-1], _DOTS[:-1])):
-                continue
-            expect, line = line[:4], line[4:]
-            if pairs:
-                pairs[-1].append(expect)
-            pairs.append([line])
-        pairs[-1].append(_ARROWS)
-
-        for line, expect in pairs:
-            self.sendline(line, expect)
+            if line.startswith(('>>>', '...')):
+                self.sendline(line[4:])
 
         result = self.flush()
         return _add_padding(result)
 
-    def sendline(self, line, expect=[_ARROWS, _DOTS]):
+    def sendline(self, line):
         self.process.sendline(line)
-        self.process.expect(expect)
+        self.process.expect(self._prompt_pattern)
 
     def flush(self):
         value = self.process.logfile_read.getvalue().replace('\r\n', '\n')
@@ -222,9 +212,9 @@ def _add_padding(contents):
     result = []
     was_prompt = True
     for line in contents.splitlines():
-        if line.startswith(_ARROWS) and not was_prompt:
+        if line.startswith('>>> ') and not was_prompt:
             result.append('')
         result.append(line.rstrip())
-        was_prompt = line.startswith((_ARROWS, _DOTS))
+        was_prompt = line.startswith(('>>> ', '... '))
     result.append('')
     return '\n'.join(result)
