@@ -191,7 +191,7 @@ class _PythonProcess:
         pairs = []
         for line in python_source_code.splitlines():
             # Ignore lines that don't represent user input.
-            if not line.startswith((_ARROWS, _DOTS)):
+            if not line.startswith((_ARROWS[:-1], _DOTS[:-1])):
                 continue
             expect, line = line[:4], line[4:]
             if pairs:
@@ -224,7 +224,7 @@ def _add_padding(contents):
     for line in contents.splitlines():
         if line.startswith(_ARROWS) and not was_prompt:
             result.append('')
-        result.append(line)
+        result.append(line.rstrip())
         was_prompt = line.startswith((_ARROWS, _DOTS))
     result.append('')
     return '\n'.join(result)
