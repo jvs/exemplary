@@ -204,3 +204,21 @@ def test_parsing_different_kinds_of_section():
 
     assert tags == expect_tags
     assert langs == expect_langs
+
+
+def test_block_in_interpreter():
+    result = exemplary.interpreter.render_document(dedent(r'''
+        ```python
+        >>> if True:
+        ...    print('ok')
+        ...
+        ```
+    '''))
+    assert result == dedent(r'''
+        ```python
+        >>> if True:
+        ...    print('ok')
+        ...
+        ok
+        ```
+    ''')

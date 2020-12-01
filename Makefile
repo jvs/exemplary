@@ -39,7 +39,7 @@ coverage: clean image
 	open "htmlcov/index.html"
 
 # How to publish a release:
-# - Update __version__ in exemplary.py.
+# - Update __version__ in exemplary/__init__.py.
 # - Commit / merge to "main" branch.
 # - Run:
 #   - make tag
