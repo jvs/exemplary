@@ -1,6 +1,8 @@
 import argparse
 import glob
 
+from . import interpreter
+
 
 def main():
     argparser = argparse.ArgumentParser(
@@ -14,7 +16,7 @@ def main():
     pathnames = []
     for path in args.paths:
         pathnames.extend(glob.glob(path, recursive=True))
-    run(pathnames, render=args.render)
+    interpreter.run(pathnames, render=args.render)
 
 
 if __name__ == '__main__':

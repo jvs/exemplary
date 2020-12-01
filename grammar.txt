@@ -1,4 +1,4 @@
-start = List(Text | VisibleSection | HiddenSection)
+start = List(Text | VisibleSection | HiddenSection | HtmlComment)
 
 Text = (ExpectNot(Marker) >> /.|\n/)+
     |> `lambda x: ''.join(x)`
@@ -16,6 +16,8 @@ class HiddenSection {
     tag: StartComment >> DanglingTag
     code: Code << /(\s|\n)*-->/
 }
+
+HtmlComment = /<!--(.|\n)*?-->/
 
 InlineTag = StartComment >> /.*?(?=\s*-->)/ << /\s*-->/
     |> `lambda x: x.lower() or None`
