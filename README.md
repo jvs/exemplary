@@ -94,6 +94,12 @@ def render_docs():
     exemplary.run(pathnames, render=True)
 ```
 
+Or run from a shell script:
+
+```console
+python3 -m exemplary --paths "**/*.md" --render
+```
+
 Aftwards, the example will look like this:
 
 ~~~markdown
