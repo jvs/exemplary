@@ -2,7 +2,7 @@
 
 """
 # Grammar definition:
-start = List(Text | VisibleSection | HiddenSection)
+start = List(Text | VisibleSection | HiddenSection | HtmlComment)
 
 Text = (ExpectNot(Marker) >> /.|\\n/)+
     |> `lambda x: ''.join(x)`
@@ -20,6 +20,8 @@ class HiddenSection {
     tag: StartComment >> DanglingTag
     code: Code << /(\\s|\\n)*-->/
 }
+
+HtmlComment = /<!--(.|\\n)*?-->/
 
 InlineTag = StartComment >> /.*?(?=\\s*-->)/ << /\\s*-->/
     |> `lambda x: x.lower() or None`
@@ -324,19 +326,20 @@ def _map_index_to_line_and_column(text):
 matcher1 = _compile_re('.|\\n', flags=0).match
 matcher2 = _compile_re('[\\s\\n]*', flags=0).match
 matcher3 = _compile_re('(\\s|\\n)*-->', flags=0).match
-matcher4 = _compile_re('.*?(?=\\s*-->)', flags=0).match
-matcher5 = _compile_re('\\s*-->', flags=0).match
-matcher6 = _compile_re('[^\\n]*', flags=0).match
-matcher7 = _compile_re('(\\s|\\n)*', flags=0).match
-matcher8 = _compile_re('(.|\\n)*?(?=\\s*-->)', flags=0).match
-matcher9 = _compile_re('<!--[ \\t]*', flags=0).match
-matcher10 = _compile_re('\\n', flags=0).match
+matcher4 = _compile_re('<!--(.|\\n)*?-->', flags=0).match
+matcher5 = _compile_re('.*?(?=\\s*-->)', flags=0).match
+matcher6 = _compile_re('\\s*-->', flags=0).match
+matcher7 = _compile_re('[^\\n]*', flags=0).match
+matcher8 = _compile_re('(\\s|\\n)*', flags=0).match
+matcher9 = _compile_re('(.|\\n)*?(?=\\s*-->)', flags=0).match
+matcher10 = _compile_re('<!--[ \\t]*', flags=0).match
+matcher11 = _compile_re('\\n', flags=0).match
 
 
 def _cont_start(_text, _pos):
     # Rule 'start'
     # <List>
-    # (Text | VisibleSection | HiddenSection)*
+    # (Text | VisibleSection | HiddenSection | HtmlComment)*
     staging1 = []
     while True:
         checkpoint1 = _pos
@@ -373,6 +376,16 @@ def _cont_start(_text, _pos):
             if (farthest_pos1 < _pos):
                 farthest_pos1 = _pos
                 farthest_err1 = _result
+            _pos = backtrack1
+            # Option 4:
+            # <Ref name='HtmlComment'>
+            (_status, _result, _pos,) = (yield (3, _cont_HtmlComment, _pos,))
+            # </Ref>
+            if _status:
+                break
+            if (farthest_pos1 < _pos):
+                farthest_pos1 = _pos
+                farthest_err1 = _result
             _pos = farthest_pos1
             _result = farthest_err1
             break
@@ -392,7 +405,7 @@ def _parse_start(text, pos=0, fullparse=True):
 
 
 start = Rule('start', _parse_start, """
-    start = (Text | VisibleSection | HiddenSection)*
+    start = (Text | VisibleSection | HiddenSection | HtmlComment)*
 """)
 
 def _raise_error3(_text, _pos):
@@ -406,7 +419,7 @@ def _raise_error3(_text, _pos):
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
     "Failed to parse the 'start' rule, at the expression:\n"
-    '    Text | VisibleSection | HiddenSection\n\n'
+    '    Text | VisibleSection | HiddenSection | HtmlComment\n\n'
     'Unexpected input'
     )
     raise ParseError((title + details), _pos, line, col)
@@ -433,7 +446,7 @@ def _cont_Text(_text, _pos):
             _pos = backtrack2
             if _status:
                 _status = False
-                _result = _raise_error11
+                _result = _raise_error12
             else:
                 _status = True
                 _result = None
@@ -448,7 +461,7 @@ def _cont_Text(_text, _pos):
                 _result = match1.group(0)
             else:
                 _status = False
-                _result = _raise_error13
+                _result = _raise_error14
             # </Regex>
             break
         # </Discard>
@@ -477,7 +490,7 @@ Text = Rule('Text', _parse_Text, """
     Text = (ExpectNot(Marker) >> /.|\\n/)+ |> `lambda x: ''.join(x)`
 """)
 
-def _raise_error11(_text, _pos):
+def _raise_error12(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -494,7 +507,7 @@ def _raise_error11(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error13(_text, _pos):
+def _raise_error14(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -515,7 +528,7 @@ def _cont_Marker(_text, _pos):
     # Rule 'Marker'
     # <Choice>
     backtrack3 = farthest_pos2 = _pos
-    farthest_err2 = _raise_error16
+    farthest_err2 = _raise_error17
     while True:
         # Option 1:
         # <String value='```'>
@@ -527,7 +540,7 @@ def _cont_Marker(_text, _pos):
             _result = value1
         else:
             _status = False
-            _result = _raise_error17
+            _result = _raise_error18
         # </String>
         if _status:
             break
@@ -545,7 +558,7 @@ def _cont_Marker(_text, _pos):
             _result = value2
         else:
             _status = False
-            _result = _raise_error18
+            _result = _raise_error19
         # </String>
         if _status:
             break
@@ -563,7 +576,7 @@ def _cont_Marker(_text, _pos):
             _result = value3
         else:
             _status = False
-            _result = _raise_error19
+            _result = _raise_error20
         # </String>
         if _status:
             break
@@ -585,7 +598,7 @@ Marker = Rule('Marker', _parse_Marker, """
     Marker = '```' | '~~~' | '<!--'
 """)
 
-def _raise_error16(_text, _pos):
+def _raise_error17(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -602,7 +615,7 @@ def _raise_error16(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error17(_text, _pos):
+def _raise_error18(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -619,7 +632,7 @@ def _raise_error17(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error18(_text, _pos):
+def _raise_error19(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -636,7 +649,7 @@ def _raise_error18(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error19(_text, _pos):
+def _raise_error20(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -708,7 +721,7 @@ def _cont_VisibleSection(_text, _pos):
                 _result = match2.group(0)
             else:
                 _status = False
-                _result = _raise_error28
+                _result = _raise_error29
             # </Regex>
             if _status:
                 _result = staging3
@@ -730,7 +743,7 @@ def _cont_VisibleSection(_text, _pos):
     (yield (_status, _result, _pos,))
 
 
-def _raise_error28(_text, _pos):
+def _raise_error29(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -812,7 +825,7 @@ def _cont_HiddenSection(_text, _pos):
                 _result = match3.group(0)
             else:
                 _status = False
-                _result = _raise_error42
+                _result = _raise_error43
             # </Regex>
             if _status:
                 _result = staging4
@@ -828,7 +841,7 @@ def _cont_HiddenSection(_text, _pos):
     (yield (_status, _result, _pos,))
 
 
-def _raise_error42(_text, _pos):
+def _raise_error43(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -841,6 +854,46 @@ def _raise_error42(_text, _pos):
     "Failed to parse the 'HiddenSection' rule, at the expression:\n"
     '    /(\\\\s|\\\\n)*-->/\n\n'
     'Expected to match the regular expression /(\\s|\\n)*-->/'
+    )
+    raise ParseError((title + details), _pos, line, col)
+
+
+def _cont_HtmlComment(_text, _pos):
+    # Rule 'HtmlComment'
+    # <Regex pattern='<!--(.|\\n)*?-->'>
+    match4 = matcher4(_text, _pos)
+    if match4:
+        _pos = match4.end()
+        _status = True
+        _result = match4.group(0)
+    else:
+        _status = False
+        _result = _raise_error45
+    # </Regex>
+    (yield (_status, _result, _pos,))
+
+
+def _parse_HtmlComment(text, pos=0, fullparse=True):
+    return _run(text, pos, _cont_HtmlComment, fullparse)
+
+
+HtmlComment = Rule('HtmlComment', _parse_HtmlComment, """
+    HtmlComment = /<!--(.|\\n)*?-->/
+""")
+
+def _raise_error45(_text, _pos):
+    if (len(_text) <= _pos):
+        title = 'Unexpected end of input.'
+        line = None
+        col = None
+    else:
+        (line, col,) = _get_line_and_column(_text, _pos)
+        excerpt = _extract_excerpt(_text, _pos, col)
+        title = f'Error on line {line}, column {col}:\n{excerpt}\n'
+    details = (
+    "Failed to parse the 'HtmlComment' rule, at the expression:\n"
+    '    /<!--(.|\\\\n)*?-->/\n\n'
+    'Expected to match the regular expression /<!--(.|\\n)*?-->/'
     )
     raise ParseError((title + details), _pos, line, col)
 
@@ -861,14 +914,14 @@ def _cont_InlineTag(_text, _pos):
             if (not _status):
                 break
             # <Regex pattern='.*?(?=\\s*-->)'>
-            match4 = matcher4(_text, _pos)
-            if match4:
-                _pos = match4.end()
+            match5 = matcher5(_text, _pos)
+            if match5:
+                _pos = match5.end()
                 _status = True
-                _result = match4.group(0)
+                _result = match5.group(0)
             else:
                 _status = False
-                _result = _raise_error48
+                _result = _raise_error51
             # </Regex>
             break
         # </Discard>
@@ -876,14 +929,14 @@ def _cont_InlineTag(_text, _pos):
             break
         staging5 = _result
         # <Regex pattern='\\s*-->'>
-        match5 = matcher5(_text, _pos)
-        if match5:
-            _pos = match5.end()
+        match6 = matcher6(_text, _pos)
+        if match6:
+            _pos = match6.end()
             _status = True
-            _result = match5.group(0)
+            _result = match6.group(0)
         else:
             _status = False
-            _result = _raise_error49
+            _result = _raise_error52
         # </Regex>
         if _status:
             _result = staging5
@@ -906,7 +959,7 @@ InlineTag = Rule('InlineTag', _parse_InlineTag, """
     InlineTag = ((StartComment >> /.*?(?=\\s*-->)/) << /\\s*-->/) |> `lambda x: x.lower() or None`
 """)
 
-def _raise_error48(_text, _pos):
+def _raise_error51(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -923,7 +976,7 @@ def _raise_error48(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error49(_text, _pos):
+def _raise_error52(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -948,19 +1001,6 @@ def _cont_DanglingTag(_text, _pos):
     # /[^\\n]*/ << /(\\s|\\n)*/
     while True:
         # <Regex pattern='[^\\n]*'>
-        match6 = matcher6(_text, _pos)
-        if match6:
-            _pos = match6.end()
-            _status = True
-            _result = match6.group(0)
-        else:
-            _status = False
-            _result = _raise_error54
-        # </Regex>
-        if (not _status):
-            break
-        staging6 = _result
-        # <Regex pattern='(\\s|\\n)*'>
         match7 = matcher7(_text, _pos)
         if match7:
             _pos = match7.end()
@@ -968,7 +1008,20 @@ def _cont_DanglingTag(_text, _pos):
             _result = match7.group(0)
         else:
             _status = False
-            _result = _raise_error55
+            _result = _raise_error57
+        # </Regex>
+        if (not _status):
+            break
+        staging6 = _result
+        # <Regex pattern='(\\s|\\n)*'>
+        match8 = matcher8(_text, _pos)
+        if match8:
+            _pos = match8.end()
+            _status = True
+            _result = match8.group(0)
+        else:
+            _status = False
+            _result = _raise_error58
         # </Regex>
         if _status:
             _result = staging6
@@ -991,7 +1044,7 @@ DanglingTag = Rule('DanglingTag', _parse_DanglingTag, """
     DanglingTag = (/[^\\n]*/ << /(\\s|\\n)*/) |> `lambda x: x.strip().lower() or None`
 """)
 
-def _raise_error54(_text, _pos):
+def _raise_error57(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1008,7 +1061,7 @@ def _raise_error54(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error55(_text, _pos):
+def _raise_error58(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1028,14 +1081,14 @@ def _raise_error55(_text, _pos):
 def _cont_HiddenBody(_text, _pos):
     # Rule 'HiddenBody'
     # <Regex pattern='(.|\\n)*?(?=\\s*-->)'>
-    match8 = matcher8(_text, _pos)
-    if match8:
-        _pos = match8.end()
+    match9 = matcher9(_text, _pos)
+    if match9:
+        _pos = match9.end()
         _status = True
-        _result = match8.group(0)
+        _result = match9.group(0)
     else:
         _status = False
-        _result = _raise_error58
+        _result = _raise_error61
     # </Regex>
     (yield (_status, _result, _pos,))
 
@@ -1048,7 +1101,7 @@ HiddenBody = Rule('HiddenBody', _parse_HiddenBody, """
     HiddenBody = /(.|\\n)*?(?=\\s*-->)/
 """)
 
-def _raise_error58(_text, _pos):
+def _raise_error61(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1068,14 +1121,14 @@ def _raise_error58(_text, _pos):
 def _cont_StartComment(_text, _pos):
     # Rule 'StartComment'
     # <Regex pattern='<!--[ \\t]*'>
-    match9 = matcher9(_text, _pos)
-    if match9:
-        _pos = match9.end()
+    match10 = matcher10(_text, _pos)
+    if match10:
+        _pos = match10.end()
         _status = True
-        _result = match9.group(0)
+        _result = match10.group(0)
     else:
         _status = False
-        _result = _raise_error60
+        _result = _raise_error63
     # </Regex>
     (yield (_status, _result, _pos,))
 
@@ -1088,7 +1141,7 @@ StartComment = Rule('StartComment', _parse_StartComment, """
     StartComment = /<!--[ \\t]*/
 """)
 
-def _raise_error60(_text, _pos):
+def _raise_error63(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1105,7 +1158,7 @@ def _raise_error60(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _parse_function_65(_text, _pos):
+def _parse_function_68(_text, _pos):
     # <String value='```'>
     value4 = '```'
     end4 = (_pos + 3)
@@ -1115,12 +1168,12 @@ def _parse_function_65(_text, _pos):
         _result = value4
     else:
         _status = False
-        _result = _raise_error65
+        _result = _raise_error68
     # </String>
     (yield (_status, _result, _pos,))
 
 
-def _parse_function_68(_text, _pos):
+def _parse_function_71(_text, _pos):
     # <String value='~~~'>
     value5 = '~~~'
     end5 = (_pos + 3)
@@ -1130,7 +1183,7 @@ def _parse_function_68(_text, _pos):
         _result = value5
     else:
         _status = False
-        _result = _raise_error68
+        _result = _raise_error71
     # </String>
     (yield (_status, _result, _pos,))
 
@@ -1139,12 +1192,12 @@ def _cont_Code(_text, _pos):
     # Rule 'Code'
     # <Choice>
     backtrack5 = farthest_pos3 = _pos
-    farthest_err3 = _raise_error62
+    farthest_err3 = _raise_error65
     while True:
         # Option 1:
         # <Call>
         # CodeSection('```')
-        arg4 = _wrap_string_literal('```', _parse_function_65)
+        arg4 = _wrap_string_literal('```', _parse_function_68)
         func1 = _ParseFunction(_cont_CodeSection, (arg4,), ())
         (_status, _result, _pos,) = (yield (3, func1, _pos,))
         # </Call>
@@ -1157,7 +1210,7 @@ def _cont_Code(_text, _pos):
         # Option 2:
         # <Call>
         # CodeSection('~~~')
-        arg5 = _wrap_string_literal('~~~', _parse_function_68)
+        arg5 = _wrap_string_literal('~~~', _parse_function_71)
         func2 = _ParseFunction(_cont_CodeSection, (arg5,), ())
         (_status, _result, _pos,) = (yield (3, func2, _pos,))
         # </Call>
@@ -1181,7 +1234,7 @@ Code = Rule('Code', _parse_Code, """
     Code = CodeSection('```') | CodeSection('~~~')
 """)
 
-def _raise_error62(_text, _pos):
+def _raise_error65(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1198,7 +1251,7 @@ def _raise_error62(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error65(_text, _pos):
+def _raise_error68(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1215,7 +1268,7 @@ def _raise_error65(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error68(_text, _pos):
+def _raise_error71(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1273,14 +1326,14 @@ def _cont_CodeSection(_text, _pos, marker):
         # <Apply>
         # /[^\\n]*/ |> (`lambda x: x.strip().lower() or None` << /\\n/)
         # <Regex pattern='[^\\n]*'>
-        match10 = matcher6(_text, _pos)
-        if match10:
-            _pos = match10.end()
+        match11 = matcher7(_text, _pos)
+        if match11:
+            _pos = match11.end()
             _status = True
-            _result = match10.group(0)
+            _result = match11.group(0)
         else:
             _status = False
-            _result = _raise_error75
+            _result = _raise_error78
         # </Regex>
         if _status:
             arg6 = _result
@@ -1291,14 +1344,14 @@ def _cont_CodeSection(_text, _pos, marker):
                 _status = True
                 staging7 = _result
                 # <Regex pattern='\\n'>
-                match11 = matcher10(_text, _pos)
-                if match11:
-                    _pos = match11.end()
+                match12 = matcher11(_text, _pos)
+                if match12:
+                    _pos = match12.end()
                     _status = True
-                    _result = match11.group(0)
+                    _result = match12.group(0)
                 else:
                     _status = False
-                    _result = _raise_error78
+                    _result = _raise_error81
                 # </Regex>
                 if _status:
                     _result = staging7
@@ -1329,7 +1382,7 @@ def _cont_CodeSection(_text, _pos, marker):
                 _pos = backtrack6
                 if _status:
                     _status = False
-                    _result = _raise_error83
+                    _result = _raise_error86
                 else:
                     _status = True
                     _result = None
@@ -1337,14 +1390,14 @@ def _cont_CodeSection(_text, _pos, marker):
                 if (not _status):
                     break
                 # <Regex pattern='.|\\n'>
-                match12 = matcher1(_text, _pos)
-                if match12:
-                    _pos = match12.end()
+                match13 = matcher1(_text, _pos)
+                if match13:
+                    _pos = match13.end()
                     _status = True
-                    _result = match12.group(0)
+                    _result = match13.group(0)
                 else:
                     _status = False
-                    _result = _raise_error85
+                    _result = _raise_error88
                 # </Regex>
                 break
             # </Discard>
@@ -1374,7 +1427,7 @@ def _cont_CodeSection(_text, _pos, marker):
     (yield (_status, _result, _pos,))
 
 
-def _raise_error75(_text, _pos):
+def _raise_error78(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1391,7 +1444,7 @@ def _raise_error75(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error78(_text, _pos):
+def _raise_error81(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1408,7 +1461,7 @@ def _raise_error78(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error83(_text, _pos):
+def _raise_error86(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
@@ -1425,7 +1478,7 @@ def _raise_error83(_text, _pos):
     raise ParseError((title + details), _pos, line, col)
 
 
-def _raise_error85(_text, _pos):
+def _raise_error88(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
