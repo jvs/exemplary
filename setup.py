@@ -1,3 +1,4 @@
+import os
 import re
 import setuptools
 
@@ -13,7 +14,7 @@ def install_requires():
 
 
 def version():
-    with open('exemplary/__init__.py') as f:
+    with open(os.path.join('exemplary', '__init__.py') as f:
         regex = re.compile('\\n__version__\\s*=\\s*[\'"]+([\\d\\.]+)[\'"]\n')
         return regex.search(f.read()).group(1)
 
