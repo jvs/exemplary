@@ -1,13 +1,4 @@
-# Runs the docker container and executes the command.
-RUN := docker run --rm --name exemplary -v `pwd`:/workspace exemplary
-
-# Runs bash in the container.
-bash:
-	docker run --rm --name exemplary -v `pwd`:/workspace -it exemplary /bin/bash
-
-# Create a docker image with Python and our dev dependencies.
-image: Dockerfile
-	docker build -t exemplary .
+PYTHON := .venv/bin/python
 
 # Remove random debris left around by python, pytest, and coverage.
 clean:
@@ -24,18 +15,26 @@ clean:
 		MANIFEST \
 		*.egg-info
 
-parser: grammar.txt
-	$(RUN) python generate_parser.py
+test: clean exemplary/parser.py
+	$(PYTHON) -m pytest -v -s tests.py
 
-# Run the tests in a docker container.
-test: clean image parser
-	$(RUN) python -m pytest -v -s tests.py
+exemplary/parser.py: venv grammar.txt generate_parser.py
+	$(PYTHON) generate_parser.py
+
+venv: .venv/bin/activate
+
+.venv/bin/activate: requirements.txt requirements-dev.txt
+	test -d .venv || python3 -m venv .venv
+	.venv/bin/pip install --upgrade pip
+	.venv/bin/pip install -r requirements.txt
+	.venv/bin/pip install -r requirements-dev.txt
+	touch .venv/bin/activate
 
 # Run the tests, compute test coverage, and open the coverage report.
-coverage: clean image
-	$(RUN) /bin/bash -c "coverage run -m pytest -v -s tests.py \
-		&& coverage report --omit='exemplary/parser.py' \
-		&& coverage html --omit='exemplary/parser.py' "
+coverage: clean venv exemplary/parser.py
+	.venv/bin/coverage run -m pytest -v -s tests.py
+	.venv/bin/coverage report --omit='exemplary/parser.py'
+	.venv/bin/coverage html --omit='exemplary/parser.py'
 	open "htmlcov/index.html"
 
 # How to publish a release:
@@ -55,17 +54,17 @@ tag: clean
 	git push origin $(VERSION)
 
 # Build the distribution.
-dist: clean parser
+dist: clean venv exemplary/parser.py
 	rm -rf dist/
-	python3 setup.py sdist
-	twine check dist/*
+	$(PYTHON) setup.py sdist
+	.venv/bin/twine check dist/*
 
 # Upload the library to pypitest.
 upload_test: dist
-	twine upload --repository pypitest dist/*
+	.venv/bin/twine upload --repository pypitest dist/*
 
 # Upload the library to pypi.
 upload_real: dist
-	twine upload --repository pypi dist/*
+	.venv/bin/twine upload --repository pypi dist/*
 
 .PHONY: bash clean coverage dist tag test upload_real upload_test
