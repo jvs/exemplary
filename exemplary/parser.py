@@ -47,10 +47,11 @@ class CodeSection(marker) {
 from collections import namedtuple as _nt
 from re import compile as _compile_re, IGNORECASE as _IGNORECASE
 
-
-
 class Node:
     _fields = ()
+
+    def __init__(self):
+        self._metadata = _Metadata()
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
@@ -67,7 +68,29 @@ class Node:
         for field in self._fields:
             if field not in kw:
                 kw[field] = getattr(self, field)
-        return self.__class__(**kw)
+        result = self.__class__(**kw)
+        result._metadata.update(self._metadata)
+        return result
+
+
+class _Metadata:
+    def __init__(self, **fields):
+        object.__setattr__(self, '_fields', fields)
+
+    def __getattr__(self, name):
+        return self._fields.get(name)
+
+    def __setattr__(self, name, value):
+        self._fields[name] = value
+
+    def __len__(self):
+        return len(self._fields)
+
+    def copy(self):
+        return _Metadata(**self._fields)
+
+    def update(self, other):
+        self._fields.update(other._fields)
 
 
 class Rule:
@@ -79,7 +102,6 @@ class Rule:
     def __repr__(self):
         return (f'Rule(name={self.name!r}, parse={self.parse.__name__},'
             f' definition={self.definition!r})')
-
 
 
 class SourcerError(Exception):
@@ -104,6 +126,7 @@ class Infix(Node):
     _fields = ('left', 'operator', 'right')
 
     def __init__(self, left, operator, right):
+        Node.__init__(self)
         self.left = left
         self.operator = operator
         self.right = right
@@ -116,6 +139,7 @@ class Postfix(Node):
     _fields = ('left', 'operator')
 
     def __init__(self, left, operator):
+        Node.__init__(self)
         self.left = left
         self.operator = operator
 
@@ -127,6 +151,7 @@ class Prefix(Node):
     _fields = ('operator', 'right')
 
     def __init__(self, operator, right):
+        Node.__init__(self)
         self.operator = operator
         self.right = right
 
@@ -135,7 +160,7 @@ class Prefix(Node):
 
 
 def parse(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_start, fullparse)
+    return _run(text, pos, _try_start, fullparse)
 
 
 _PositionInfo = _nt('_PositionInfo', 'start, end')
@@ -213,6 +238,56 @@ def visit(node):
                 stack.extend(getattr(node, x) for x in node._fields)
 
 
+_Traversing = _nt('_Traversing', 'parent, field, child, is_finished')
+
+
+def traverse(node):
+    visited = set()
+    stack = [_Traversing(parent=None, field=None, child=node, is_finished=False)]
+    while stack:
+        traversing = stack.pop()
+
+        if traversing.is_finished:
+            yield traversing
+            continue
+
+        child = traversing.child
+        child_id = id(child)
+
+        if child_id in visited:
+            continue
+
+        visited.add(child_id)
+        stack.append(traversing._replace(is_finished=True))
+        yield traversing
+
+        def extend(items):
+            stack.extend(reversed(list(items)))
+
+        if isinstance(child, (list, tuple)):
+            extend(
+                _Traversing(parent=child, field=i, child=x, is_finished=False)
+                for i, x in enumerate(child)
+            )
+
+        elif isinstance(child, dict):
+            extend(
+                _Traversing(parent=child, field=k, child=v, is_finished=False)
+                for k, v in child.items()
+            )
+
+        elif isinstance(child, Node) and hasattr(child, '_fields'):
+            extend(
+                _Traversing(
+                    parent=child,
+                    field=x,
+                    child=getattr(child, x),
+                    is_finished=False,
+                )
+                for x in child._fields
+            )
+
+
 def transform(node, *callbacks):
     if not callbacks:
         return node
@@ -239,8 +314,10 @@ def _transform(node, callback):
     for field in node._fields:
         was = getattr(node, field)
         now = _transform(was, callback)
-        if was is not now:
+        if now is not was:
             updates[field] = now
+            if isinstance(was, Node) and isinstance(now, Node) and not now._metadata:
+                now._metadata.update(was._metadata)
 
     if updates:
         node = node._replace(**updates)
@@ -252,11 +329,11 @@ def _finalize_parse_info(text, nodes, pos, fullparse):
     line_numbers, column_numbers = _map_index_to_line_and_column(text)
 
     for node in visit(nodes):
-        pos_info = getattr(node, '_position_info', None)
+        pos_info = node._metadata.position_info
         if pos_info:
             start, end = pos_info
             end -= 1
-            node._position_info = _PositionInfo(
+            node._metadata.position_info = _PositionInfo(
                 start=_Position(start, line_numbers[start], column_numbers[start]),
                 end=_Position(end, line_numbers[end], column_numbers[end]),
             )
@@ -321,8 +398,6 @@ def _map_index_to_line_and_column(text):
 
     return line_numbers, column_numbers
 
-
-
 matcher1 = _compile_re('.|\\n', flags=0).match
 matcher2 = _compile_re('[\\s\\n]*', flags=0).match
 matcher3 = _compile_re('(\\s|\\n)*-->', flags=0).match
@@ -335,22 +410,21 @@ matcher9 = _compile_re('(.|\\n)*?(?=\\s*-->)', flags=0).match
 matcher10 = _compile_re('<!--[ \\t]*', flags=0).match
 matcher11 = _compile_re('\\n', flags=0).match
 
-
-def _cont_start(_text, _pos):
+def _try_start(_text, _pos):
     # Rule 'start'
-    # <List>
+    # Begin List
     # (Text | VisibleSection | HiddenSection | HtmlComment)*
     staging1 = []
     while True:
         checkpoint1 = _pos
-        # <Choice>
-        backtrack1 = farthest_pos1 = _pos
+        # Begin Choice
         farthest_err1 = _raise_error3
+        backtrack1 = farthest_pos1 = _pos
         while True:
             # Option 1:
-            # <Ref name='Text'>
-            (_status, _result, _pos,) = (yield (3, _cont_Text, _pos,))
-            # </Ref>
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_Text, _pos))
+            # End Ref
             if _status:
                 break
             if (farthest_pos1 < _pos):
@@ -358,9 +432,9 @@ def _cont_start(_text, _pos):
                 farthest_err1 = _result
             _pos = backtrack1
             # Option 2:
-            # <Ref name='VisibleSection'>
-            (_status, _result, _pos,) = (yield (3, _cont_VisibleSection, _pos,))
-            # </Ref>
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_VisibleSection, _pos))
+            # End Ref
             if _status:
                 break
             if (farthest_pos1 < _pos):
@@ -368,9 +442,9 @@ def _cont_start(_text, _pos):
                 farthest_err1 = _result
             _pos = backtrack1
             # Option 3:
-            # <Ref name='HiddenSection'>
-            (_status, _result, _pos,) = (yield (3, _cont_HiddenSection, _pos,))
-            # </Ref>
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_HiddenSection, _pos))
+            # End Ref
             if _status:
                 break
             if (farthest_pos1 < _pos):
@@ -378,9 +452,9 @@ def _cont_start(_text, _pos):
                 farthest_err1 = _result
             _pos = backtrack1
             # Option 4:
-            # <Ref name='HtmlComment'>
-            (_status, _result, _pos,) = (yield (3, _cont_HtmlComment, _pos,))
-            # </Ref>
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_HtmlComment, _pos))
+            # End Ref
             if _status:
                 break
             if (farthest_pos1 < _pos):
@@ -389,32 +463,29 @@ def _cont_start(_text, _pos):
             _pos = farthest_pos1
             _result = farthest_err1
             break
-        # </Choice>
-        if (not _status):
+        # End Choice
+        if not (_status):
             _pos = checkpoint1
             break
         staging1.append(_result)
     _result = staging1
     _status = True
-    # </List>
-    (yield (_status, _result, _pos,))
-
+    # End List
+    yield (_status, _result, _pos)
 
 def _parse_start(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_start, fullparse)
-
+    return _run(text, pos, _try_start, fullparse)
 
 start = Rule('start', _parse_start, """
     start = (Text | VisibleSection | HiddenSection | HtmlComment)*
 """)
-
 def _raise_error3(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -424,25 +495,24 @@ def _raise_error3(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_Text(_text, _pos):
+def _try_Text(_text, _pos):
     # Rule 'Text'
-    # <Apply>
+    # Begin Apply
     # (ExpectNot(Marker) >> /.|\\n/)+ |> `lambda x: ''.join(x)`
-    # <List>
+    # Begin List
     # (ExpectNot(Marker) >> /.|\\n/)+
     staging2 = []
     while True:
         checkpoint2 = _pos
-        # <Discard>
+        # Begin Discard
         # ExpectNot(Marker) >> /.|\\n/
         while True:
-            # <ExpectNot>
+            # Begin ExpectNot
             # ExpectNot(Marker)
             backtrack2 = _pos
-            # <Ref name='Marker'>
-            (_status, _result, _pos,) = (yield (3, _cont_Marker, _pos,))
-            # </Ref>
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_Marker, _pos))
+            # End Ref
             _pos = backtrack2
             if _status:
                 _status = False
@@ -450,53 +520,51 @@ def _cont_Text(_text, _pos):
             else:
                 _status = True
                 _result = None
-            # </ExpectNot>
-            if (not _status):
+            # End ExpectNot
+            if not (_status):
                 break
-            # <Regex pattern='.|\\n'>
+            # Begin Regex
+            # /.|\\n/
             match1 = matcher1(_text, _pos)
             if match1:
+                _result = match1.group(0)
                 _pos = match1.end()
                 _status = True
-                _result = match1.group(0)
             else:
-                _status = False
                 _result = _raise_error14
-            # </Regex>
+                _status = False
+            # End Regex
             break
-        # </Discard>
-        if (not _status):
+        # End Discard
+        if not (_status):
             _pos = checkpoint2
             break
         staging2.append(_result)
     if staging2:
         _result = staging2
         _status = True
-    # </List>
+    # End List
     if _status:
         arg1 = _result
         _result = lambda x: ''.join(x)
         _status = True
         _result = _result(arg1)
-    # </Apply>
-    (yield (_status, _result, _pos,))
-
+    # End Apply
+    yield (_status, _result, _pos)
 
 def _parse_Text(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_Text, fullparse)
-
+    return _run(text, pos, _try_Text, fullparse)
 
 Text = Rule('Text', _parse_Text, """
     Text = (ExpectNot(Marker) >> /.|\\n/)+ |> `lambda x: ''.join(x)`
 """)
-
 def _raise_error12(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -506,14 +574,13 @@ def _raise_error12(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error14(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -523,88 +590,73 @@ def _raise_error14(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_Marker(_text, _pos):
+def _try_Marker(_text, _pos):
     # Rule 'Marker'
-    # <Choice>
-    backtrack3 = farthest_pos2 = _pos
+    # Begin Choice
     farthest_err2 = _raise_error17
+    farthest_pos2 = _pos
     while True:
         # Option 1:
-        # <String value='```'>
+        # Begin Str
         value1 = '```'
         end1 = (_pos + 3)
-        if (_text[_pos : end1] == value1):
+        if (_text[slice(_pos, end1, None)] == value1):
+            _result = value1
             _pos = end1
             _status = True
-            _result = value1
         else:
-            _status = False
             _result = _raise_error18
-        # </String>
+            _status = False
+        # End Str
         if _status:
             break
-        if (farthest_pos2 < _pos):
-            farthest_pos2 = _pos
-            farthest_err2 = _result
-        _pos = backtrack3
         # Option 2:
-        # <String value='~~~'>
+        # Begin Str
         value2 = '~~~'
         end2 = (_pos + 3)
-        if (_text[_pos : end2] == value2):
+        if (_text[slice(_pos, end2, None)] == value2):
+            _result = value2
             _pos = end2
             _status = True
-            _result = value2
         else:
-            _status = False
             _result = _raise_error19
-        # </String>
+            _status = False
+        # End Str
         if _status:
             break
-        if (farthest_pos2 < _pos):
-            farthest_pos2 = _pos
-            farthest_err2 = _result
-        _pos = backtrack3
         # Option 3:
-        # <String value='<!--'>
+        # Begin Str
         value3 = '<!--'
         end3 = (_pos + 4)
-        if (_text[_pos : end3] == value3):
+        if (_text[slice(_pos, end3, None)] == value3):
+            _result = value3
             _pos = end3
             _status = True
-            _result = value3
         else:
-            _status = False
             _result = _raise_error20
-        # </String>
+            _status = False
+        # End Str
         if _status:
             break
-        if (farthest_pos2 < _pos):
-            farthest_pos2 = _pos
-            farthest_err2 = _result
         _pos = farthest_pos2
         _result = farthest_err2
         break
-    # </Choice>
-    (yield (_status, _result, _pos,))
-
+    # End Choice
+    yield (_status, _result, _pos)
 
 def _parse_Marker(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_Marker, fullparse)
-
+    return _run(text, pos, _try_Marker, fullparse)
 
 Marker = Rule('Marker', _parse_Marker, """
     Marker = '```' | '~~~' | '<!--'
 """)
-
 def _raise_error17(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -614,14 +666,13 @@ def _raise_error17(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error18(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -631,14 +682,13 @@ def _raise_error18(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error19(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -648,14 +698,13 @@ def _raise_error19(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error20(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -665,83 +714,81 @@ def _raise_error20(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 class VisibleSection(Node):
     """
     class VisibleSection {
         is_visible: `True`
-        tag: Opt(InlineTag) << /[\\s\\n]*/
+        tag: Opt(InlineTag) << /[\\\\s\\\\n]*/
         code: Code
     }
     """
-    _fields = ('is_visible', 'tag', 'code',)
+    _fields = ('is_visible', 'tag', 'code')
 
     def __init__(self, is_visible, tag, code):
+        Node.__init__(self)
         self.is_visible = is_visible
         self.tag = tag
         self.code = code
-        self._position_info = None
 
     def __repr__(self):
         return f'VisibleSection(is_visible={self.is_visible!r}, tag={self.tag!r}, code={self.code!r})'
 
     @staticmethod
     def parse(text, pos=0, fullparse=True):
-        return _run(text, pos, _cont_VisibleSection, fullparse)
+        return _run(text, pos, _try_VisibleSection, fullparse)
 
 
-
-def _cont_VisibleSection(_text, _pos):
-    # <Seq>
+def _try_VisibleSection(_text, _pos):
+    # Begin Seq
     start_pos1 = _pos
     while True:
         _result = True
         _status = True
         is_visible = _result
-        # <Discard>
+        # Begin Discard
         # Opt(InlineTag) << /[\\s\\n]*/
         while True:
-            # <Opt>
+            # Begin Opt
             # Opt(InlineTag)
-            backtrack4 = _pos
-            # <Ref name='InlineTag'>
-            (_status, _result, _pos,) = (yield (3, _cont_InlineTag, _pos,))
-            # </Ref>
-            if (not _status):
-                _status = True
-                _pos = backtrack4
+            backtrack3 = _pos
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_InlineTag, _pos))
+            # End Ref
+            if not (_status):
+                _pos = backtrack3
                 _result = None
-            # </Opt>
+                _status = True
+            # End Opt
             staging3 = _result
-            # <Regex pattern='[\\s\\n]*'>
+            # Begin Regex
+            # /[\\s\\n]*/
             match2 = matcher2(_text, _pos)
             if match2:
+                _result = match2.group(0)
                 _pos = match2.end()
                 _status = True
-                _result = match2.group(0)
             else:
-                _status = False
                 _result = _raise_error29
-            # </Regex>
+                _status = False
+            # End Regex
             if _status:
                 _result = staging3
             break
-        # </Discard>
-        if (not _status):
+        # End Discard
+        if not (_status):
             break
         tag = _result
-        # <Ref name='Code'>
-        (_status, _result, _pos,) = (yield (3, _cont_Code, _pos,))
-        # </Ref>
-        if (not _status):
+        # Begin Ref
+        (_status, _result, _pos) = (yield (3, _try_Code, _pos))
+        # End Ref
+        if not (_status):
             break
         code = _result
         _result = VisibleSection(is_visible, tag, code)
-        _result._position_info = (start_pos1, _pos,)
+        _result._metadata.position_info = (start_pos1, _pos)
         break
-    # </Seq>
-    (yield (_status, _result, _pos,))
-
+    # End Seq
+    yield (_status, _result, _pos)
 
 def _raise_error29(_text, _pos):
     if (len(_text) <= _pos):
@@ -749,7 +796,7 @@ def _raise_error29(_text, _pos):
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -759,87 +806,85 @@ def _raise_error29(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 class HiddenSection(Node):
     """
     class HiddenSection {
         is_visible: `False`
         tag: StartComment >> DanglingTag
-        code: Code << /(\\s|\\n)*-->/
+        code: Code << /(\\\\s|\\\\n)*-->/
     }
     """
-    _fields = ('is_visible', 'tag', 'code',)
+    _fields = ('is_visible', 'tag', 'code')
 
     def __init__(self, is_visible, tag, code):
+        Node.__init__(self)
         self.is_visible = is_visible
         self.tag = tag
         self.code = code
-        self._position_info = None
 
     def __repr__(self):
         return f'HiddenSection(is_visible={self.is_visible!r}, tag={self.tag!r}, code={self.code!r})'
 
     @staticmethod
     def parse(text, pos=0, fullparse=True):
-        return _run(text, pos, _cont_HiddenSection, fullparse)
+        return _run(text, pos, _try_HiddenSection, fullparse)
 
 
-
-def _cont_HiddenSection(_text, _pos):
-    # <Seq>
+def _try_HiddenSection(_text, _pos):
+    # Begin Seq
     start_pos2 = _pos
     while True:
         _result = False
         _status = True
         is_visible = _result
-        # <Discard>
+        # Begin Discard
         # StartComment >> DanglingTag
         while True:
-            # <Ref name='StartComment'>
-            (_status, _result, _pos,) = (yield (3, _cont_StartComment, _pos,))
-            # </Ref>
-            if (not _status):
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_StartComment, _pos))
+            # End Ref
+            if not (_status):
                 break
-            # <Ref name='DanglingTag'>
-            (_status, _result, _pos,) = (yield (3, _cont_DanglingTag, _pos,))
-            # </Ref>
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_DanglingTag, _pos))
+            # End Ref
             break
-        # </Discard>
-        if (not _status):
+        # End Discard
+        if not (_status):
             break
         tag = _result
-        # <Discard>
+        # Begin Discard
         # Code << /(\\s|\\n)*-->/
         while True:
-            # <Ref name='Code'>
-            (_status, _result, _pos,) = (yield (3, _cont_Code, _pos,))
-            # </Ref>
-            if (not _status):
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_Code, _pos))
+            # End Ref
+            if not (_status):
                 break
             staging4 = _result
-            # <Regex pattern='(\\s|\\n)*-->'>
+            # Begin Regex
+            # /(\\s|\\n)*-->/
             match3 = matcher3(_text, _pos)
             if match3:
+                _result = match3.group(0)
                 _pos = match3.end()
                 _status = True
-                _result = match3.group(0)
             else:
-                _status = False
                 _result = _raise_error43
-            # </Regex>
+                _status = False
+            # End Regex
             if _status:
                 _result = staging4
             break
-        # </Discard>
-        if (not _status):
+        # End Discard
+        if not (_status):
             break
         code = _result
         _result = HiddenSection(is_visible, tag, code)
-        _result._position_info = (start_pos2, _pos,)
+        _result._metadata.position_info = (start_pos2, _pos)
         break
-    # </Seq>
-    (yield (_status, _result, _pos,))
-
+    # End Seq
+    yield (_status, _result, _pos)
 
 def _raise_error43(_text, _pos):
     if (len(_text) <= _pos):
@@ -847,7 +892,7 @@ def _raise_error43(_text, _pos):
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -857,37 +902,34 @@ def _raise_error43(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_HtmlComment(_text, _pos):
+def _try_HtmlComment(_text, _pos):
     # Rule 'HtmlComment'
-    # <Regex pattern='<!--(.|\\n)*?-->'>
+    # Begin Regex
+    # /<!--(.|\\n)*?-->/
     match4 = matcher4(_text, _pos)
     if match4:
+        _result = match4.group(0)
         _pos = match4.end()
         _status = True
-        _result = match4.group(0)
     else:
-        _status = False
         _result = _raise_error45
-    # </Regex>
-    (yield (_status, _result, _pos,))
-
+        _status = False
+    # End Regex
+    yield (_status, _result, _pos)
 
 def _parse_HtmlComment(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_HtmlComment, fullparse)
-
+    return _run(text, pos, _try_HtmlComment, fullparse)
 
 HtmlComment = Rule('HtmlComment', _parse_HtmlComment, """
     HtmlComment = /<!--(.|\\n)*?-->/
 """)
-
 def _raise_error45(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -897,75 +939,73 @@ def _raise_error45(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_InlineTag(_text, _pos):
+def _try_InlineTag(_text, _pos):
     # Rule 'InlineTag'
-    # <Apply>
+    # Begin Apply
     # ((StartComment >> /.*?(?=\\s*-->)/) << /\\s*-->/) |> `lambda x: x.lower() or None`
-    # <Discard>
+    # Begin Discard
     # (StartComment >> /.*?(?=\\s*-->)/) << /\\s*-->/
     while True:
-        # <Discard>
+        # Begin Discard
         # StartComment >> /.*?(?=\\s*-->)/
         while True:
-            # <Ref name='StartComment'>
-            (_status, _result, _pos,) = (yield (3, _cont_StartComment, _pos,))
-            # </Ref>
-            if (not _status):
+            # Begin Ref
+            (_status, _result, _pos) = (yield (3, _try_StartComment, _pos))
+            # End Ref
+            if not (_status):
                 break
-            # <Regex pattern='.*?(?=\\s*-->)'>
+            # Begin Regex
+            # /.*?(?=\\s*-->)/
             match5 = matcher5(_text, _pos)
             if match5:
+                _result = match5.group(0)
                 _pos = match5.end()
                 _status = True
-                _result = match5.group(0)
             else:
-                _status = False
                 _result = _raise_error51
-            # </Regex>
+                _status = False
+            # End Regex
             break
-        # </Discard>
-        if (not _status):
+        # End Discard
+        if not (_status):
             break
         staging5 = _result
-        # <Regex pattern='\\s*-->'>
+        # Begin Regex
+        # /\\s*-->/
         match6 = matcher6(_text, _pos)
         if match6:
+            _result = match6.group(0)
             _pos = match6.end()
             _status = True
-            _result = match6.group(0)
         else:
-            _status = False
             _result = _raise_error52
-        # </Regex>
+            _status = False
+        # End Regex
         if _status:
             _result = staging5
         break
-    # </Discard>
+    # End Discard
     if _status:
         arg2 = _result
         _result = lambda x: x.lower() or None
         _status = True
         _result = _result(arg2)
-    # </Apply>
-    (yield (_status, _result, _pos,))
-
+    # End Apply
+    yield (_status, _result, _pos)
 
 def _parse_InlineTag(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_InlineTag, fullparse)
-
+    return _run(text, pos, _try_InlineTag, fullparse)
 
 InlineTag = Rule('InlineTag', _parse_InlineTag, """
     InlineTag = ((StartComment >> /.*?(?=\\s*-->)/) << /\\s*-->/) |> `lambda x: x.lower() or None`
 """)
-
 def _raise_error51(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -975,14 +1015,13 @@ def _raise_error51(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error52(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -992,65 +1031,63 @@ def _raise_error52(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_DanglingTag(_text, _pos):
+def _try_DanglingTag(_text, _pos):
     # Rule 'DanglingTag'
-    # <Apply>
+    # Begin Apply
     # (/[^\\n]*/ << /(\\s|\\n)*/) |> `lambda x: x.strip().lower() or None`
-    # <Discard>
+    # Begin Discard
     # /[^\\n]*/ << /(\\s|\\n)*/
     while True:
-        # <Regex pattern='[^\\n]*'>
+        # Begin Regex
+        # /[^\\n]*/
         match7 = matcher7(_text, _pos)
         if match7:
+            _result = match7.group(0)
             _pos = match7.end()
             _status = True
-            _result = match7.group(0)
         else:
-            _status = False
             _result = _raise_error57
-        # </Regex>
-        if (not _status):
+            _status = False
+        # End Regex
+        if not (_status):
             break
         staging6 = _result
-        # <Regex pattern='(\\s|\\n)*'>
+        # Begin Regex
+        # /(\\s|\\n)*/
         match8 = matcher8(_text, _pos)
         if match8:
+            _result = match8.group(0)
             _pos = match8.end()
             _status = True
-            _result = match8.group(0)
         else:
-            _status = False
             _result = _raise_error58
-        # </Regex>
+            _status = False
+        # End Regex
         if _status:
             _result = staging6
         break
-    # </Discard>
+    # End Discard
     if _status:
         arg3 = _result
         _result = lambda x: x.strip().lower() or None
         _status = True
         _result = _result(arg3)
-    # </Apply>
-    (yield (_status, _result, _pos,))
-
+    # End Apply
+    yield (_status, _result, _pos)
 
 def _parse_DanglingTag(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_DanglingTag, fullparse)
-
+    return _run(text, pos, _try_DanglingTag, fullparse)
 
 DanglingTag = Rule('DanglingTag', _parse_DanglingTag, """
     DanglingTag = (/[^\\n]*/ << /(\\s|\\n)*/) |> `lambda x: x.strip().lower() or None`
 """)
-
 def _raise_error57(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1060,14 +1097,13 @@ def _raise_error57(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error58(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1077,37 +1113,34 @@ def _raise_error58(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_HiddenBody(_text, _pos):
+def _try_HiddenBody(_text, _pos):
     # Rule 'HiddenBody'
-    # <Regex pattern='(.|\\n)*?(?=\\s*-->)'>
+    # Begin Regex
+    # /(.|\\n)*?(?=\\s*-->)/
     match9 = matcher9(_text, _pos)
     if match9:
+        _result = match9.group(0)
         _pos = match9.end()
         _status = True
-        _result = match9.group(0)
     else:
-        _status = False
         _result = _raise_error61
-    # </Regex>
-    (yield (_status, _result, _pos,))
-
+        _status = False
+    # End Regex
+    yield (_status, _result, _pos)
 
 def _parse_HiddenBody(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_HiddenBody, fullparse)
-
+    return _run(text, pos, _try_HiddenBody, fullparse)
 
 HiddenBody = Rule('HiddenBody', _parse_HiddenBody, """
     HiddenBody = /(.|\\n)*?(?=\\s*-->)/
 """)
-
 def _raise_error61(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1117,37 +1150,34 @@ def _raise_error61(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
-def _cont_StartComment(_text, _pos):
+def _try_StartComment(_text, _pos):
     # Rule 'StartComment'
-    # <Regex pattern='<!--[ \\t]*'>
+    # Begin Regex
+    # /<!--[ \\t]*/
     match10 = matcher10(_text, _pos)
     if match10:
+        _result = match10.group(0)
         _pos = match10.end()
         _status = True
-        _result = match10.group(0)
     else:
-        _status = False
         _result = _raise_error63
-    # </Regex>
-    (yield (_status, _result, _pos,))
-
+        _status = False
+    # End Regex
+    yield (_status, _result, _pos)
 
 def _parse_StartComment(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_StartComment, fullparse)
-
+    return _run(text, pos, _try_StartComment, fullparse)
 
 StartComment = Rule('StartComment', _parse_StartComment, """
     StartComment = /<!--[ \\t]*/
 """)
-
 def _raise_error63(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1157,63 +1187,60 @@ def _raise_error63(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _parse_function_68(_text, _pos):
-    # <String value='```'>
+    # Begin Str
     value4 = '```'
     end4 = (_pos + 3)
-    if (_text[_pos : end4] == value4):
+    if (_text[slice(_pos, end4, None)] == value4):
+        _result = value4
         _pos = end4
         _status = True
-        _result = value4
     else:
-        _status = False
         _result = _raise_error68
-    # </String>
-    (yield (_status, _result, _pos,))
-
+        _status = False
+    # End Str
+    yield (_status, _result, _pos)
 
 def _parse_function_71(_text, _pos):
-    # <String value='~~~'>
+    # Begin Str
     value5 = '~~~'
     end5 = (_pos + 3)
-    if (_text[_pos : end5] == value5):
+    if (_text[slice(_pos, end5, None)] == value5):
+        _result = value5
         _pos = end5
         _status = True
-        _result = value5
     else:
-        _status = False
         _result = _raise_error71
-    # </String>
-    (yield (_status, _result, _pos,))
+        _status = False
+    # End Str
+    yield (_status, _result, _pos)
 
-
-def _cont_Code(_text, _pos):
+def _try_Code(_text, _pos):
     # Rule 'Code'
-    # <Choice>
-    backtrack5 = farthest_pos3 = _pos
+    # Begin Choice
     farthest_err3 = _raise_error65
+    backtrack4 = farthest_pos3 = _pos
     while True:
         # Option 1:
-        # <Call>
+        # Begin Call
         # CodeSection('```')
         arg4 = _wrap_string_literal('```', _parse_function_68)
-        func1 = _ParseFunction(_cont_CodeSection, (arg4,), ())
-        (_status, _result, _pos,) = (yield (3, func1, _pos,))
-        # </Call>
+        func1 = _ParseFunction(_try_CodeSection, (arg4,), ())
+        (_status, _result, _pos) = (yield (3, func1, _pos))
+        # End Call
         if _status:
             break
         if (farthest_pos3 < _pos):
             farthest_pos3 = _pos
             farthest_err3 = _result
-        _pos = backtrack5
+        _pos = backtrack4
         # Option 2:
-        # <Call>
+        # Begin Call
         # CodeSection('~~~')
         arg5 = _wrap_string_literal('~~~', _parse_function_71)
-        func2 = _ParseFunction(_cont_CodeSection, (arg5,), ())
-        (_status, _result, _pos,) = (yield (3, func2, _pos,))
-        # </Call>
+        func2 = _ParseFunction(_try_CodeSection, (arg5,), ())
+        (_status, _result, _pos) = (yield (3, func2, _pos))
+        # End Call
         if _status:
             break
         if (farthest_pos3 < _pos):
@@ -1222,25 +1249,22 @@ def _cont_Code(_text, _pos):
         _pos = farthest_pos3
         _result = farthest_err3
         break
-    # </Choice>
-    (yield (_status, _result, _pos,))
-
+    # End Choice
+    yield (_status, _result, _pos)
 
 def _parse_Code(text, pos=0, fullparse=True):
-    return _run(text, pos, _cont_Code, fullparse)
-
+    return _run(text, pos, _try_Code, fullparse)
 
 Code = Rule('Code', _parse_Code, """
     Code = CodeSection('```') | CodeSection('~~~')
 """)
-
 def _raise_error65(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1250,14 +1274,13 @@ def _raise_error65(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error68(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1267,14 +1290,13 @@ def _raise_error68(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error71(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1284,148 +1306,148 @@ def _raise_error71(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 class CodeSection(Node):
     """
     class CodeSection(marker) {
         open: marker
-        language: /[^\\n]*/ |> (`lambda x: x.strip().lower() or None` << /\\n/)
-        body: (ExpectNot(marker) >> /.|\\n/)* |> `lambda x: ''.join(x)`
+        language: /[^\\\\n]*/ |> (`lambda x: x.strip().lower() or None` << /\\\\n/)
+        body: (ExpectNot(marker) >> /.|\\\\n/)* |> `lambda x: ''.join(x)`
         close: marker
     }
     """
-    _fields = ('open', 'language', 'body', 'close',)
+    _fields = ('open', 'language', 'body', 'close')
 
     def __init__(self, open, language, body, close):
+        Node.__init__(self)
         self.open = open
         self.language = language
         self.body = body
         self.close = close
-        self._position_info = None
 
     def __repr__(self):
         return f'CodeSection(open={self.open!r}, language={self.language!r}, body={self.body!r}, close={self.close!r})'
 
     @staticmethod
     def parse(marker):
-        closure = _ParseFunction(_cont_CodeSection, (marker,), {})
-        return lambda text, pos=0, fullparse=True: _run(text, pos, closure, fullparse)
+        _closure = _ParseFunction(_try_CodeSection, (marker,), {})
+        return lambda text, pos=0, fullparse=True: _run(text, pos, _closure, fullparse)
 
 
-
-def _cont_CodeSection(_text, _pos, marker):
-    # <Seq>
+def _try_CodeSection(_text, _pos, marker):
+    # Begin Seq
     start_pos3 = _pos
     while True:
-        # <Ref name='marker'>
-        (_status, _result, _pos,) = (yield (3, marker, _pos,))
-        # </Ref>
-        if (not _status):
+        # Begin Ref
+        (_status, _result, _pos) = (yield (3, marker, _pos))
+        # End Ref
+        if not (_status):
             break
         open = _result
-        # <Apply>
+        # Begin Apply
         # /[^\\n]*/ |> (`lambda x: x.strip().lower() or None` << /\\n/)
-        # <Regex pattern='[^\\n]*'>
+        # Begin Regex
+        # /[^\\n]*/
         match11 = matcher7(_text, _pos)
         if match11:
+            _result = match11.group(0)
             _pos = match11.end()
             _status = True
-            _result = match11.group(0)
         else:
-            _status = False
             _result = _raise_error78
-        # </Regex>
+            _status = False
+        # End Regex
         if _status:
             arg6 = _result
-            # <Discard>
+            # Begin Discard
             # `lambda x: x.strip().lower() or None` << /\\n/
             while True:
                 _result = lambda x: x.strip().lower() or None
                 _status = True
                 staging7 = _result
-                # <Regex pattern='\\n'>
+                # Begin Regex
+                # /\\n/
                 match12 = matcher11(_text, _pos)
                 if match12:
+                    _result = match12.group(0)
                     _pos = match12.end()
                     _status = True
-                    _result = match12.group(0)
                 else:
-                    _status = False
                     _result = _raise_error81
-                # </Regex>
+                    _status = False
+                # End Regex
                 if _status:
                     _result = staging7
                 break
-            # </Discard>
+            # End Discard
             if _status:
                 _result = _result(arg6)
-        # </Apply>
-        if (not _status):
+        # End Apply
+        if not (_status):
             break
         language = _result
-        # <Apply>
+        # Begin Apply
         # (ExpectNot(marker) >> /.|\\n/)* |> `lambda x: ''.join(x)`
-        # <List>
+        # Begin List
         # (ExpectNot(marker) >> /.|\\n/)*
         staging8 = []
         while True:
             checkpoint3 = _pos
-            # <Discard>
+            # Begin Discard
             # ExpectNot(marker) >> /.|\\n/
             while True:
-                # <ExpectNot>
+                # Begin ExpectNot
                 # ExpectNot(marker)
-                backtrack6 = _pos
-                # <Ref name='marker'>
-                (_status, _result, _pos,) = (yield (3, marker, _pos,))
-                # </Ref>
-                _pos = backtrack6
+                backtrack5 = _pos
+                # Begin Ref
+                (_status, _result, _pos) = (yield (3, marker, _pos))
+                # End Ref
+                _pos = backtrack5
                 if _status:
                     _status = False
                     _result = _raise_error86
                 else:
                     _status = True
                     _result = None
-                # </ExpectNot>
-                if (not _status):
+                # End ExpectNot
+                if not (_status):
                     break
-                # <Regex pattern='.|\\n'>
+                # Begin Regex
+                # /.|\\n/
                 match13 = matcher1(_text, _pos)
                 if match13:
+                    _result = match13.group(0)
                     _pos = match13.end()
                     _status = True
-                    _result = match13.group(0)
                 else:
-                    _status = False
                     _result = _raise_error88
-                # </Regex>
+                    _status = False
+                # End Regex
                 break
-            # </Discard>
-            if (not _status):
+            # End Discard
+            if not (_status):
                 _pos = checkpoint3
                 break
             staging8.append(_result)
         _result = staging8
         _status = True
-        # </List>
+        # End List
         arg7 = _result
         _result = lambda x: ''.join(x)
         _status = True
         _result = _result(arg7)
-        # </Apply>
+        # End Apply
         body = _result
-        # <Ref name='marker'>
-        (_status, _result, _pos,) = (yield (3, marker, _pos,))
-        # </Ref>
-        if (not _status):
+        # Begin Ref
+        (_status, _result, _pos) = (yield (3, marker, _pos))
+        # End Ref
+        if not (_status):
             break
         close = _result
         _result = CodeSection(open, language, body, close)
-        _result._position_info = (start_pos3, _pos,)
+        _result._metadata.position_info = (start_pos3, _pos)
         break
-    # </Seq>
-    (yield (_status, _result, _pos,))
-
+    # End Seq
+    yield (_status, _result, _pos)
 
 def _raise_error78(_text, _pos):
     if (len(_text) <= _pos):
@@ -1433,7 +1455,7 @@ def _raise_error78(_text, _pos):
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1443,14 +1465,13 @@ def _raise_error78(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error81(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1460,14 +1481,13 @@ def _raise_error81(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error86(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1477,14 +1497,13 @@ def _raise_error86(_text, _pos):
     )
     raise ParseError((title + details), _pos, line, col)
 
-
 def _raise_error88(_text, _pos):
     if (len(_text) <= _pos):
         title = 'Unexpected end of input.'
         line = None
         col = None
     else:
-        (line, col,) = _get_line_and_column(_text, _pos)
+        (line, col) = _get_line_and_column(_text, _pos)
         excerpt = _extract_excerpt(_text, _pos, col)
         title = f'Error on line {line}, column {col}:\n{excerpt}\n'
     details = (
@@ -1493,5 +1512,4 @@ def _raise_error88(_text, _pos):
     'Expected to match the regular expression /.|\\n/'
     )
     raise ParseError((title + details), _pos, line, col)
-
 

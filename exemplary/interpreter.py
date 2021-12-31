@@ -60,7 +60,8 @@ def test_document(document_contents):
         if code.body.strip().startswith('>>> '):
             continue
 
-        print(f'# Testing Python section on line {code._position_info.start.line}:')
+        line_number = code._metadata.position_info.start.line
+        print(f'# Testing Python section on line {line_number}:')
         print(_make_preview(code.body), flush=True)
         try:
             exec(code.body, global_env, local_env)
@@ -89,7 +90,7 @@ def render_document(document_contents):
             result.write(section)
             continue
 
-        sec_info = section._position_info
+        sec_info = section._metadata.position_info
         section_start, section_end = sec_info.start.index, sec_info.end.index
         section_content = document_contents[section_start : section_end + 1]
 
@@ -114,7 +115,7 @@ def render_document(document_contents):
         if playback is None:
             result.write(section_content)
         else:
-            code_info = code._position_info
+            code_info = code._metadata.position_info
             code_start, code_end = code_info.start.index, code_info.end.index
             result.write(''.join([
                 document_contents[section_start : code_start],
