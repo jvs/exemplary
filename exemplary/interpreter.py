@@ -1,5 +1,6 @@
 import io
 import re
+import sys
 
 import pexpect
 
@@ -153,7 +154,7 @@ class _PythonProcess:
 
     def run(self, python_source_code):
         if self.process is None:
-            self.process = pexpect.spawn('python', encoding='utf-8')
+            self.process = pexpect.spawn(sys.executable, encoding='utf-8')
             self.process.logfile_read = io.StringIO()
             self.process.expect('>>> ')
             self.flush()
